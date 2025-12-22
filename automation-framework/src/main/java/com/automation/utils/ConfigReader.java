@@ -108,6 +108,24 @@ public class ConfigReader {
     }
 
     /**
+     * Gets super admin username from config
+     *
+     * @return Super admin username
+     */
+    public static String getSuperAdminUsername() {
+        return getProperty("superadmin.username");
+    }
+
+    /**
+     * Gets super admin password from config
+     *
+     * @return Super admin password
+     */
+    public static String getSuperAdminPassword() {
+        return getProperty("superadmin.password");
+    }
+
+    /**
      * Gets implicit wait time from config
      *
      * @return Implicit wait time in seconds

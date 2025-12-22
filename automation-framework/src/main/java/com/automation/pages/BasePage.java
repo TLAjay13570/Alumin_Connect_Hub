@@ -25,13 +25,47 @@ public class BasePage {
     }
 
     /**
-     * Navigates to a URL
+     * Navigates to a URL with retry logic
      *
      * @param url URL to navigate to
      */
     public void navigateTo(String url) {
         logger.info("Navigating to: {}", url);
-        driver.get(url);
+        int maxRetries = 3;
+        int retryCount = 0;
+        Exception lastException = null;
+
+        while (retryCount < maxRetries) {
+            try {
+                driver.get(url);
+                // Wait a moment to ensure page is loaded
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                logger.debug("Successfully navigated to: {}", url);
+                return;
+            } catch (Exception e) {
+                lastException = e;
+                retryCount++;
+                logger.warn("Navigation attempt {} failed: {}", retryCount, e.getMessage());
+                
+                if (retryCount < maxRetries) {
+                    try {
+                        logger.info("Retrying navigation in 2 seconds...");
+                        Thread.sleep(2000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+        
+        logger.error("Failed to navigate to {} after {} attempts", url, maxRetries);
+        if (lastException != null) {
+            throw new RuntimeException("Navigation failed after " + maxRetries + " attempts: " + lastException.getMessage(), lastException);
+        }
     }
 
     /**

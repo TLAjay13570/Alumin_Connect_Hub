@@ -14,15 +14,18 @@ import java.util.List;
 
 /**
  * Utility class for WebDriver wait operations
+ * Gets fresh driver reference for each operation to avoid stale session issues
  */
 public class WebDriverWaitUtil {
     private static final Logger logger = LogManager.getLogger(WebDriverWaitUtil.class);
-    private static WebDriver driver = DriverFactory.getCurrentDriver();
-    private static WebDriverWait wait;
 
-    static {
+    /**
+     * Gets a fresh WebDriverWait instance with the current driver
+     */
+    private static WebDriverWait getWait() {
+        WebDriver driver = DriverFactory.getCurrentDriver();
         int explicitWait = ConfigReader.getExplicitWait();
-        wait = new WebDriverWait(driver, Duration.ofSeconds(explicitWait));
+        return new WebDriverWait(driver, Duration.ofSeconds(explicitWait));
     }
 
     /**
@@ -33,7 +36,7 @@ public class WebDriverWaitUtil {
      */
     public static WebElement waitForElementVisible(WebElement element) {
         logger.debug("Waiting for element to be visible");
-        return wait.until(ExpectedConditions.visibilityOf(element));
+        return getWait().until(ExpectedConditions.visibilityOf(element));
     }
 
     /**
@@ -44,7 +47,7 @@ public class WebDriverWaitUtil {
      */
     public static WebElement waitForElementVisible(By locator) {
         logger.debug("Waiting for element to be visible: {}", locator);
-        return wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
+        return getWait().until(ExpectedConditions.visibilityOfElementLocated(locator));
     }
 
     /**
@@ -55,7 +58,7 @@ public class WebDriverWaitUtil {
      */
     public static WebElement waitForElementClickable(WebElement element) {
         logger.debug("Waiting for element to be clickable");
-        return wait.until(ExpectedConditions.elementToBeClickable(element));
+        return getWait().until(ExpectedConditions.elementToBeClickable(element));
     }
 
     /**
@@ -66,7 +69,7 @@ public class WebDriverWaitUtil {
      */
     public static WebElement waitForElementClickable(By locator) {
         logger.debug("Waiting for element to be clickable: {}", locator);
-        return wait.until(ExpectedConditions.elementToBeClickable(locator));
+        return getWait().until(ExpectedConditions.elementToBeClickable(locator));
     }
 
     /**
@@ -77,7 +80,7 @@ public class WebDriverWaitUtil {
      */
     public static WebElement waitForElementPresent(By locator) {
         logger.debug("Waiting for element to be present: {}", locator);
-        return wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+        return getWait().until(ExpectedConditions.presenceOfElementLocated(locator));
     }
 
     /**
@@ -88,7 +91,7 @@ public class WebDriverWaitUtil {
      */
     public static List<WebElement> waitForAllElementsVisible(By locator) {
         logger.debug("Waiting for all elements to be visible: {}", locator);
-        return wait.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(locator));
+        return getWait().until(ExpectedConditions.visibilityOfAllElementsLocatedBy(locator));
     }
 
     /**
@@ -99,7 +102,7 @@ public class WebDriverWaitUtil {
      */
     public static boolean waitForElementInvisible(WebElement element) {
         logger.debug("Waiting for element to be invisible");
-        return wait.until(ExpectedConditions.invisibilityOf(element));
+        return getWait().until(ExpectedConditions.invisibilityOf(element));
     }
 
     /**
@@ -110,7 +113,7 @@ public class WebDriverWaitUtil {
      */
     public static boolean waitForElementInvisible(By locator) {
         logger.debug("Waiting for element to be invisible: {}", locator);
-        return wait.until(ExpectedConditions.invisibilityOfElementLocated(locator));
+        return getWait().until(ExpectedConditions.invisibilityOfElementLocated(locator));
     }
 
     /**
@@ -122,7 +125,7 @@ public class WebDriverWaitUtil {
      */
     public static boolean waitForTextToBePresentInElement(WebElement element, String text) {
         logger.debug("Waiting for text '{}' to be present in element", text);
-        return wait.until(ExpectedConditions.textToBePresentInElement(element, text));
+        return getWait().until(ExpectedConditions.textToBePresentInElement(element, text));
     }
 
     /**
@@ -133,7 +136,7 @@ public class WebDriverWaitUtil {
      */
     public static boolean waitForUrlToContain(String text) {
         logger.debug("Waiting for URL to contain: {}", text);
-        return wait.until(ExpectedConditions.urlContains(text));
+        return getWait().until(ExpectedConditions.urlContains(text));
     }
 
     /**
@@ -144,7 +147,7 @@ public class WebDriverWaitUtil {
      */
     public static boolean waitForTitleToContain(String text) {
         logger.debug("Waiting for title to contain: {}", text);
-        return wait.until(ExpectedConditions.titleContains(text));
+        return getWait().until(ExpectedConditions.titleContains(text));
     }
 
     /**
@@ -154,7 +157,7 @@ public class WebDriverWaitUtil {
      */
     public static org.openqa.selenium.Alert waitForAlert() {
         logger.debug("Waiting for alert to be present");
-        return wait.until(ExpectedConditions.alertIsPresent());
+        return getWait().until(ExpectedConditions.alertIsPresent());
     }
 
     /**
@@ -165,7 +168,15 @@ public class WebDriverWaitUtil {
      */
     public static WebDriver waitForFrameAndSwitch(By locator) {
         logger.debug("Waiting for frame and switching: {}", locator);
-        return wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(locator));
+        return getWait().until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(locator));
+    }
+
+    /**
+     * Waits for page to be fully loaded
+     */
+    public static void waitForPageToLoad() {
+        logger.debug("Waiting for page to load");
+        staticWait(2);
     }
 
     /**
@@ -183,5 +194,3 @@ public class WebDriverWaitUtil {
         }
     }
 }
-
-

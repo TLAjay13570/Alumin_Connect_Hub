@@ -62,6 +62,10 @@ public class DriverFactory {
                 chromeOptions.addArguments("--disable-popup-blocking");
                 chromeOptions.addArguments("--no-sandbox");
                 chromeOptions.addArguments("--disable-dev-shm-usage");
+                chromeOptions.addArguments("--disable-blink-features=AutomationControlled");
+                chromeOptions.addArguments("--disable-infobars");
+                chromeOptions.addArguments("--remote-allow-origins=*");
+                chromeOptions.setPageLoadStrategy(org.openqa.selenium.PageLoadStrategy.NORMAL);
                 driver = new ChromeDriver(chromeOptions);
                 break;
 
