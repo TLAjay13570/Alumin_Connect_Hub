@@ -1,7 +1,6 @@
 package com.automation.stepdefinitions;
 
 import com.automation.pages.LoginPage;
-import com.automation.utils.ConfigReader;
 import com.automation.utils.ExtentReportUtil;
 import com.automation.utils.WebDriverWaitUtil;
 import io.cucumber.java.en.Given;
@@ -37,13 +36,8 @@ public class LoginStepDefinitions {
         if (userType.equalsIgnoreCase("super admin") || userType.equalsIgnoreCase("superadmin")) {
             loginPage.loginAsSuperAdmin();
         } else if (userType.equalsIgnoreCase("admin")) {
-            // Login with regular admin credentials
-            String username = ConfigReader.getUsername();
-            String password = ConfigReader.getPassword();
-            loginPage.enterUsername(username);
-            loginPage.enterPassword(password);
-            loginPage.clickLoginButton();
-            WebDriverWaitUtil.staticWait(3);
+            // Login with admin credentials from config
+            loginPage.loginAsAdmin();
         } else {
             logger.warn("Unknown user type: {}, attempting super admin login", userType);
             loginPage.loginAsSuperAdmin();

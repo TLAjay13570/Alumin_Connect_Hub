@@ -78,6 +78,22 @@ public class LoginPage extends BasePage {
     }
 
     /**
+     * Performs login as Admin using config credentials
+     */
+    public void loginAsAdmin() {
+        String username = ConfigReader.getAdminUsername();
+        String password = ConfigReader.getAdminPassword();
+        
+        logger.info("Performing admin login with username: {}", username);
+        enterUsername(username);
+        enterPassword(password);
+        clickLoginButton();
+        
+        // Wait for page to load after login
+        WebDriverWaitUtil.staticWait(3);
+    }
+
+    /**
      * Checks if specific text is displayed on the page
      *
      * @param text Text to search for

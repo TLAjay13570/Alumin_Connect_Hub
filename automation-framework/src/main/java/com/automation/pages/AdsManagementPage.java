@@ -66,12 +66,26 @@ public class AdsManagementPage extends BasePage {
      */
     public void clickCreateAdButton() {
         logger.info("Clicking Create Ad button");
-        WebElement btn = WebDriverWaitUtil.waitForElementClickable(createAdButton);
-        click(btn);
-        WebDriverWaitUtil.staticWait(2);
-        // Wait for modal to open
-        WebDriverWaitUtil.waitForElementVisible(By.id("title"));
-        logger.info("Create Ad modal opened");
+        // Wait for page to fully load
+        WebDriverWaitUtil.staticWait(3);
+        
+        // Try clicking the button multiple times if modal doesn't open
+        int maxRetries = 3;
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                WebElement btn = WebDriverWaitUtil.waitForElementClickable(createAdButton);
+                click(btn);
+                WebDriverWaitUtil.staticWait(2);
+                // Wait for modal to open
+                WebDriverWaitUtil.waitForElementVisible(By.id("title"));
+                logger.info("Create Ad modal opened");
+                return;
+            } catch (Exception e) {
+                logger.warn("Attempt {} to open Create Ad modal failed, retrying...", i + 1);
+                WebDriverWaitUtil.staticWait(2);
+            }
+        }
+        throw new RuntimeException("Failed to open Create Ad modal after " + maxRetries + " attempts");
     }
 
     /**

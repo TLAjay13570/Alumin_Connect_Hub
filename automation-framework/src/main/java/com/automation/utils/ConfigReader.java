@@ -108,6 +108,24 @@ public class ConfigReader {
     }
 
     /**
+     * Gets admin username from config
+     *
+     * @return Admin username
+     */
+    public static String getAdminUsername() {
+        return getProperty("admin.username");
+    }
+
+    /**
+     * Gets admin password from config
+     *
+     * @return Admin password
+     */
+    public static String getAdminPassword() {
+        return getProperty("admin.password");
+    }
+
+    /**
      * Gets super admin username from config
      *
      * @return Super admin username
