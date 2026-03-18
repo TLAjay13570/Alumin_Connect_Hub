@@ -7,5 +7,5 @@ Feature: Login Functionality
   @Smoke @Positive
   Scenario: Super Admin successful login
     Given I navigate to the login page
-    When I login as super admin using credentials from config
-    Then I should see "Super Admin Dashboard" text on the page
+    When I login as "super admin" using credentials from config
+    Then I should be logged in successfully

@@ -18,7 +18,7 @@ import io.cucumber.testng.CucumberOptions;
         },
         monochrome = true,
         dryRun = false,
-        tags = "@Ads"
+        tags = "@Login"
 )
 public class TestRunner extends AbstractTestNGCucumberTests {
 
