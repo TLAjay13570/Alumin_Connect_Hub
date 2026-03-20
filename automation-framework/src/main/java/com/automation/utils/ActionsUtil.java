@@ -12,8 +12,15 @@ import org.openqa.selenium.interactions.Actions;
  */
 public class ActionsUtil {
     private static final Logger logger = LogManager.getLogger(ActionsUtil.class);
-    private static WebDriver driver = DriverFactory.getCurrentDriver();
-    private static Actions actions = new Actions(driver);
+
+    /**
+     * Creates a fresh {@link Actions} instance for the current thread driver.
+     * This avoids issues where a static driver reference becomes stale in parallel runs.
+     */
+    private static Actions getActions() {
+        WebDriver driver = DriverFactory.getCurrentDriver();
+        return new Actions(driver);
+    }
 
     /**
      * Performs mouse hover on element
@@ -22,7 +29,7 @@ public class ActionsUtil {
      */
     public static void mouseHover(WebElement element) {
         logger.debug("Performing mouse hover on element");
-        actions.moveToElement(element).perform();
+        getActions().moveToElement(element).perform();
     }
 
     /**
@@ -32,7 +39,7 @@ public class ActionsUtil {
      */
     public static void rightClick(WebElement element) {
         logger.debug("Performing right click on element");
-        actions.contextClick(element).perform();
+        getActions().contextClick(element).perform();
     }
 
     /**
@@ -42,7 +49,7 @@ public class ActionsUtil {
      */
     public static void doubleClick(WebElement element) {
         logger.debug("Performing double click on element");
-        actions.doubleClick(element).perform();
+        getActions().doubleClick(element).perform();
     }
 
     /**
@@ -53,7 +60,7 @@ public class ActionsUtil {
      */
     public static void dragAndDrop(WebElement source, WebElement target) {
         logger.debug("Performing drag and drop operation");
-        actions.dragAndDrop(source, target).perform();
+        getActions().dragAndDrop(source, target).perform();
     }
 
     /**
@@ -63,7 +70,7 @@ public class ActionsUtil {
      */
     public static void clickAndHold(WebElement element) {
         logger.debug("Performing click and hold on element");
-        actions.clickAndHold(element).perform();
+        getActions().clickAndHold(element).perform();
     }
 
     /**
@@ -71,7 +78,7 @@ public class ActionsUtil {
      */
     public static void release() {
         logger.debug("Releasing mouse button");
-        actions.release().perform();
+        getActions().release().perform();
     }
 
     /**
@@ -81,7 +88,7 @@ public class ActionsUtil {
      */
     public static void moveToElementAndClick(WebElement element) {
         logger.debug("Moving to element and clicking");
-        actions.moveToElement(element).click().perform();
+        getActions().moveToElement(element).click().perform();
     }
 
     /**
@@ -92,7 +99,7 @@ public class ActionsUtil {
      */
     public static void sendKeys(WebElement element, CharSequence... keys) {
         logger.debug("Sending keys to element");
-        actions.sendKeys(element, keys).perform();
+        getActions().sendKeys(element, keys).perform();
     }
 }
 

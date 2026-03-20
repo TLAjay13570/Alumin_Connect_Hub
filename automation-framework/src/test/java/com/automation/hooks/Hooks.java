@@ -4,6 +4,7 @@ import com.automation.factory.DriverFactory;
 import com.automation.utils.ExtentReportUtil;
 import com.automation.utils.ScreenshotUtil;
 import io.cucumber.java.After;
+import io.cucumber.java.AfterAll;
 import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;
 import org.apache.logging.log4j.LogManager;
@@ -86,12 +87,10 @@ public class Hooks {
     }
 
     /**
-     * After hook with order 0 - runs last to flush reports
-     * This will flush reports after all scenarios complete
+     * Flush Extent Reports once after all scenarios.
      */
-    @After(order = 0)
-    public void flushReports() {
-        // Flush Extent Reports after all scenarios
+    @AfterAll
+    public static void flushReports() {
         ExtentReportUtil.flushReports();
         logger.info("All scenarios completed. Reports flushed.");
     }

@@ -1,14 +1,26 @@
 package com.automation.pages;
 
 import com.automation.utils.ConfigReader;
+import com.automation.utils.JavaScriptExecutorUtil;
 import com.automation.utils.WebDriverWaitUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
+import org.openqa.selenium.Alert;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
+import javax.imageio.ImageIO;
 
 /**
  * University Management Page Object Model class
@@ -142,19 +154,90 @@ public class UniversityManagementPage extends BasePage {
      */
     public void enterUniversityLogo(String logoUrl) {
         logger.info("Entering university logo URL: {}", logoUrl);
+        // The app supports both "upload file" and "paste a URL". In CI/environments without outbound access,
+        // pasting external URLs often fails silently -> upload a locally generated PNG if a file input exists.
+
+        List<By> fileInputCandidates = List.of(
+                By.xpath("//div[@role='dialog']//input[@type='file' and contains(@accept,'image')]"),
+                By.xpath("//div[@role='dialog']//input[@type='file']"),
+                By.cssSelector("input[type='file']")
+        );
+
         try {
-            // Wait for field to be visible in modal
-            WebDriverWaitUtil.waitForElementVisible(universityLogoField);
-            sendKeys(universityLogoField, logoUrl);
-        } catch (Exception e) {
-            logger.error("Error entering university logo URL: {}", e.getMessage());
-            // Try alternative locator
-            try {
-                WebElement field = driver.findElement(By.xpath("//input[@id='logo']"));
-                sendKeys(field, logoUrl);
-            } catch (Exception ex) {
-                logger.warn("Could not find logo field, continuing without logo: {}", ex.getMessage());
+            // File inputs are frequently hidden; we only need them to exist in the DOM.
+            WebElement fileInputFound = null;
+            for (By candidate : fileInputCandidates) {
+                List<WebElement> inputs = driver.findElements(candidate);
+                if (!inputs.isEmpty()) {
+                    fileInputFound = inputs.get(0);
+                    break;
+                }
             }
+
+            if (fileInputFound != null) {
+                File tmpLogo = generateTempLogoPng();
+                logger.info("Uploading temp university logo file: {}", tmpLogo.getAbsolutePath());
+                fileInputFound.sendKeys(tmpLogo.getAbsolutePath());
+
+                // Wait for preview/remove UI to appear (best-effort; not required if toast handles validation).
+                try {
+                    WebDriverWaitUtil.waitForAnyElementVisible(List.of(
+                            By.xpath("//*[contains(.,'Remove logo')]"),
+                            By.xpath("//img[contains(@alt,'logo') or contains(@alt,'Logo')]"),
+                            By.xpath("//div[contains(@class,'preview')]//img")
+                    ));
+                } catch (Exception ignored) {
+                    // Continue; create flow will validate.
+                }
+                return;
+            }
+        } catch (Exception fileInputEx) {
+            logger.debug("File input not available; falling back to pasting logo URL. Reason: {}", fileInputEx.getMessage());
+        }
+
+        // Fallback: paste URL into the URL input field.
+        List<By> urlInputCandidates = List.of(
+                By.id("logo"),
+                By.id("logoUrl"),
+                By.id("logo_url"),
+                By.id("logoURL"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Logo')]/following::input[1]"),
+                By.xpath("//div[@role='dialog']//input[contains(@placeholder,'Logo') or contains(@aria-label,'Logo')][1]"),
+                By.xpath("//div[@role='dialog']//input[contains(@name,'logo') or contains(@id,'logo')][1]")
+        );
+
+        try {
+            WebElement field = WebDriverWaitUtil.waitForAnyElementVisible(urlInputCandidates);
+            sendKeys(field, logoUrl);
+        } catch (Exception e) {
+            logger.warn("Could not set university logo URL; continuing without logo. Reason: {}", e.getMessage());
+        }
+    }
+
+    private File generateTempLogoPng() {
+        try {
+            int w = 128;
+            int h = 128;
+            BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = image.createGraphics();
+
+            // Deterministic-ish but varied color so repeated runs aren't identical.
+            int seed = UUID.randomUUID().hashCode();
+            Color bg = new Color(Math.abs(seed % 255), Math.abs((seed / 2) % 255), Math.abs((seed / 3) % 255));
+            g2.setColor(bg);
+            g2.fillRect(0, 0, w, h);
+
+            g2.setColor(Color.WHITE);
+            g2.drawString("UNI", 10, 70);
+            g2.dispose();
+
+            Path tmp = Files.createTempFile("university-logo-", ".png");
+            File tmpFile = tmp.toFile();
+            ImageIO.write(image, "png", tmpFile);
+            tmpFile.deleteOnExit();
+            return tmpFile;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate temporary logo PNG", e);
         }
     }
 
@@ -164,6 +247,7 @@ public class UniversityManagementPage extends BasePage {
     public void clickCreateOrSaveButton() {
         logger.info("Clicking Create University button");
         try {
+            ensureThemeColors();
             // Try to find "Create University" button first (exact text)
             WebElement createBtn = null;
             try {
@@ -200,6 +284,7 @@ public class UniversityManagementPage extends BasePage {
     public void clickUpdateOrSaveButton() {
         logger.info("Clicking Update University button");
         try {
+            ensureThemeColors();
             // Try to find "Update University" button first (exact text)
             WebElement updateBtn = null;
             try {
@@ -227,6 +312,46 @@ public class UniversityManagementPage extends BasePage {
             WebDriverWaitUtil.staticWait(3);
         } catch (Exception e) {
             logger.debug("Wait interrupted: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Some deployments validate that all theme color pickers have values.
+     * We populate <input type="color"> fields before submit (best-effort).
+     */
+    private void ensureThemeColors() {
+        try {
+            List<WebElement> colorInputs = driver.findElements(By.cssSelector("input[type='color']"));
+            if (colorInputs == null || colorInputs.isEmpty()) {
+                return;
+            }
+
+            // Order assumption: Light(Primary, Secondary, Accent) then Dark(Primary, Secondary, Accent).
+            String[] desiredColors = new String[] {
+                    "#3b82f6", // Light Primary (blue)
+                    "#6b7280", // Light Secondary (gray)
+                    "#10b981", // Light Accent (green)
+                    "#2563eb", // Dark Primary (blue)
+                    "#4b5563", // Dark Secondary (gray)
+                    "#059669"  // Dark Accent (teal)
+            };
+
+            int count = Math.min(desiredColors.length, colorInputs.size());
+            for (int i = 0; i < count; i++) {
+                WebElement input = colorInputs.get(i);
+                try {
+                    input.sendKeys(desiredColors[i]);
+                } catch (Exception e) {
+                    // Fallback for color inputs that don't accept direct typing.
+                    try {
+                        JavaScriptExecutorUtil.setAttribute(input, "value", desiredColors[i]);
+                    } catch (Exception ignored) {
+                        // best-effort only
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not ensure theme colors: {}", e.getMessage());
         }
     }
 
@@ -375,32 +500,40 @@ public class UniversityManagementPage extends BasePage {
      */
     public void confirmDeletion() {
         logger.info("Confirming deletion via browser alert");
+        boolean alertAccepted = false;
+
+        // 1) Native browser confirm (window.confirm)
         try {
-            // Wait a moment for the browser confirm dialog to appear
-            WebDriverWaitUtil.staticWait(1);
-            
-            // The app uses window.confirm() which creates a native browser alert
-            // We need to accept it using Selenium's Alert handling
-            try {
-                org.openqa.selenium.Alert alert = driver.switchTo().alert();
-                String alertText = alert.getText();
-                logger.info("Browser confirm dialog found with text: {}", alertText);
-                alert.accept();
-                logger.info("Accepted browser confirm dialog for deletion");
-            } catch (org.openqa.selenium.NoAlertPresentException e) {
-                logger.warn("No browser alert present - deletion might have already completed or not triggered");
-            } catch (Exception alertException) {
-                logger.debug("Error handling alert: {}", alertException.getMessage());
-            }
+            Alert alert = WebDriverWaitUtil.waitForAlert();
+            String alertText = alert.getText();
+            logger.info("Browser confirm dialog found with text: {}", alertText);
+            alert.accept();
+            alertAccepted = true;
+            logger.info("Accepted browser confirm dialog for deletion");
         } catch (Exception e) {
-            logger.warn("Error during deletion confirmation: {}", e.getMessage());
+            logger.debug("No native browser alert present: {}", e.getMessage());
         }
-        
-        // Wait for deletion to complete and toast to appear
+
+        // 2) In-app confirmation modal (Radix/shadcn confirm button)
+        if (!alertAccepted) {
+            try {
+                WebDriverWaitUtil.waitForElementClickable(confirmButton).click();
+                logger.info("Clicked in-app confirm button for deletion");
+            } catch (Exception e) {
+                logger.debug("No in-app confirm button clicked: {}", e.getMessage());
+            }
+        }
+
+        // Give UI a chance to render the toast. The step assertions will wait for expected text.
         try {
-            WebDriverWaitUtil.staticWait(3);
+            WebDriverWaitUtil.waitForAnyElementVisible(List.of(
+                    By.xpath("//*[@data-state='open' and contains(@class,'group')]"),
+                    By.xpath("//li[@data-state='open']"),
+                    By.xpath("//*[@role='status']"),
+                    By.xpath("//ol//li[contains(@class,'group') and @data-state='open']")
+            ));
         } catch (Exception e) {
-            logger.debug("Wait interrupted: {}", e.getMessage());
+            logger.debug("Toast not immediately visible after delete confirmation: {}", e.getMessage());
         }
     }
 
@@ -412,9 +545,6 @@ public class UniversityManagementPage extends BasePage {
     public boolean isSuccessMessageDisplayed() {
         logger.debug("Checking if success message is displayed");
         try {
-            // Wait a moment for toast to appear
-            WebDriverWaitUtil.staticWait(1);
-            
             // The app uses Radix UI Toast with data-state="open"
             String[] xpaths = {
                 "//*[@data-state='open' and contains(@class,'group')]",
@@ -460,6 +590,7 @@ public class UniversityManagementPage extends BasePage {
                 "//ol//li[contains(@class,'group') and @data-state='open']"
             };
             
+            String latestMessage = "";
             for (String xpath : xpaths) {
                 try {
                     List<WebElement> elements = driver.findElements(By.xpath(xpath));
@@ -467,8 +598,9 @@ public class UniversityManagementPage extends BasePage {
                         if (element.isDisplayed()) {
                             String text = element.getText();
                             if (text != null && !text.trim().isEmpty()) {
-                                logger.debug("Success message text found: {}", text);
-                                return text;
+                                // Keep updating so we return the last visible toast candidate.
+                                latestMessage = text;
+                                logger.debug("Success message text found (candidate): {}", text);
                             }
                         }
                     }
@@ -476,8 +608,8 @@ public class UniversityManagementPage extends BasePage {
                     // Continue to next xpath
                 }
             }
-            
-            return "";
+
+            return latestMessage;
         } catch (Exception e) {
             logger.debug("Could not get success message: {}", e.getMessage());
             return "";
@@ -505,6 +637,30 @@ public class UniversityManagementPage extends BasePage {
             logger.debug("Error checking success message: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Waits until the currently visible toast message contains either expected text.
+     * This reduces flakiness for delete flows where previous toast messages might still be visible briefly.
+     *
+     * @return the toast message that matched
+     */
+    public String waitForSuccessMessageContainingEither(String text1, String text2) {
+        String lower1 = text1.toLowerCase();
+        String lower2 = text2.toLowerCase();
+
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()));
+        return wait.until(d -> {
+            String msg = getSuccessMessage();
+            if (msg == null || msg.trim().isEmpty()) {
+                return null;
+            }
+            String lower = msg.toLowerCase();
+            if (lower.contains(lower1) || lower.contains(lower2)) {
+                return msg;
+            }
+            return null;
+        });
     }
 
     /**
@@ -552,6 +708,48 @@ public class UniversityManagementPage extends BasePage {
             logger.error("Error checking if university exists: {}", e.getMessage());
             return false;
         }
+    }
+
+    private boolean isUniversityPresentWithoutWait(String universityName) {
+        // Same lookup logic as isUniversityInList, but without any artificial sleeps.
+        try {
+            String[] xpaths = {
+                    String.format("//h3[normalize-space()='%s']", universityName),
+                    String.format("//h3[contains(text(),'%s')]", universityName),
+                    String.format("//main//h3[contains(text(),'%s')]", universityName),
+                    String.format("//*[@role='main']//h3[contains(text(),'%s')]", universityName),
+                    String.format("//div[contains(@class,'rounded')]//h3[contains(text(),'%s')]", universityName)
+            };
+
+            for (String xpath : xpaths) {
+                try {
+                    List<WebElement> elements = driver.findElements(By.xpath(xpath));
+                    for (WebElement element : elements) {
+                        if (element.isDisplayed()) {
+                            String text = element.getText();
+                            if (text != null && text.contains(universityName)) {
+                                return true;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // Continue to next xpath
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Waits until a university card disappears from the list.
+     * Useful for delete flows where the toast can appear before the UI refreshes.
+     */
+    public boolean waitForUniversityNotInList(String universityName) {
+        logger.debug("Waiting for university '{}' to disappear from list", universityName);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()));
+        return wait.until(d -> !isUniversityPresentWithoutWait(universityName));
     }
 
     /**

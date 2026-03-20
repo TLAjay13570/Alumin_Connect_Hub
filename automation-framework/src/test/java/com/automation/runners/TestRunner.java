@@ -18,7 +18,7 @@ import io.cucumber.testng.CucumberOptions;
         },
         monochrome = true,
         dryRun = false,
-        tags = "@Login"
+        tags = "@Smoke and @Positive"
 )
 public class TestRunner extends AbstractTestNGCucumberTests {
 

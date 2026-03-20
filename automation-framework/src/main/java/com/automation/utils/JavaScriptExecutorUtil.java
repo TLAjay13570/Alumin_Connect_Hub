@@ -12,8 +12,15 @@ import org.openqa.selenium.WebElement;
  */
 public class JavaScriptExecutorUtil {
     private static final Logger logger = LogManager.getLogger(JavaScriptExecutorUtil.class);
-    private static WebDriver driver = DriverFactory.getCurrentDriver();
-    private static JavascriptExecutor jsExecutor = (JavascriptExecutor) driver;
+
+    /**
+     * Creates a fresh JavaScriptExecutor instance for the current thread driver.
+     * This avoids stale driver references in parallel execution.
+     */
+    private static JavascriptExecutor getJsExecutor() {
+        WebDriver driver = DriverFactory.getCurrentDriver();
+        return (JavascriptExecutor) driver;
+    }
 
     /**
      * Executes JavaScript code
@@ -23,7 +30,7 @@ public class JavaScriptExecutorUtil {
      */
     public static Object executeScript(String script) {
         logger.debug("Executing JavaScript: {}", script);
-        return jsExecutor.executeScript(script);
+        return getJsExecutor().executeScript(script);
     }
 
     /**
@@ -35,7 +42,7 @@ public class JavaScriptExecutorUtil {
      */
     public static Object executeScript(String script, Object... args) {
         logger.debug("Executing JavaScript with arguments: {}", script);
-        return jsExecutor.executeScript(script, args);
+        return getJsExecutor().executeScript(script, args);
     }
 
     /**
@@ -45,7 +52,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void scrollToElement(WebElement element) {
         logger.debug("Scrolling to element");
-        jsExecutor.executeScript("arguments[0].scrollIntoView(true);", element);
+        getJsExecutor().executeScript("arguments[0].scrollIntoView(true);", element);
     }
 
     /**
@@ -53,7 +60,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void scrollToBottom() {
         logger.debug("Scrolling to bottom of page");
-        jsExecutor.executeScript("window.scrollTo(0, document.body.scrollHeight);");
+        getJsExecutor().executeScript("window.scrollTo(0, document.body.scrollHeight);");
     }
 
     /**
@@ -61,7 +68,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void scrollToTop() {
         logger.debug("Scrolling to top of page");
-        jsExecutor.executeScript("window.scrollTo(0, 0);");
+        getJsExecutor().executeScript("window.scrollTo(0, 0);");
     }
 
     /**
@@ -72,7 +79,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void scrollBy(int xPixels, int yPixels) {
         logger.debug("Scrolling by {} horizontal and {} vertical pixels", xPixels, yPixels);
-        jsExecutor.executeScript("window.scrollBy(" + xPixels + "," + yPixels + ");");
+        getJsExecutor().executeScript("window.scrollBy(" + xPixels + "," + yPixels + ");");
     }
 
     /**
@@ -82,7 +89,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void clickElement(WebElement element) {
         logger.debug("Clicking element using JavaScript");
-        jsExecutor.executeScript("arguments[0].click();", element);
+        getJsExecutor().executeScript("arguments[0].click();", element);
     }
 
     /**
@@ -92,7 +99,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void highlightElement(WebElement element) {
         logger.debug("Highlighting element");
-        jsExecutor.executeScript("arguments[0].style.border='3px solid red'", element);
+        getJsExecutor().executeScript("arguments[0].style.border='3px solid red'", element);
     }
 
     /**
@@ -102,7 +109,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void removeHighlight(WebElement element) {
         logger.debug("Removing highlight from element");
-        jsExecutor.executeScript("arguments[0].style.border=''", element);
+        getJsExecutor().executeScript("arguments[0].style.border=''", element);
     }
 
     /**
@@ -112,7 +119,7 @@ public class JavaScriptExecutorUtil {
      */
     public static String getPageTitle() {
         logger.debug("Getting page title using JavaScript");
-        return (String) jsExecutor.executeScript("return document.title;");
+        return (String) getJsExecutor().executeScript("return document.title;");
     }
 
     /**
@@ -122,7 +129,7 @@ public class JavaScriptExecutorUtil {
      */
     public static String getPageUrl() {
         logger.debug("Getting page URL using JavaScript");
-        return (String) jsExecutor.executeScript("return window.location.href;");
+        return (String) getJsExecutor().executeScript("return window.location.href;");
     }
 
     /**
@@ -130,7 +137,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void waitForPageLoad() {
         logger.debug("Waiting for page to load completely");
-        jsExecutor.executeScript("return document.readyState").equals("complete");
+        getJsExecutor().executeScript("return document.readyState").equals("complete");
     }
 
     /**
@@ -142,7 +149,7 @@ public class JavaScriptExecutorUtil {
      */
     public static void setAttribute(WebElement element, String attribute, String value) {
         logger.debug("Setting attribute {} to {} using JavaScript", attribute, value);
-        jsExecutor.executeScript("arguments[0].setAttribute('" + attribute + "', '" + value + "');", element);
+        getJsExecutor().executeScript("arguments[0].setAttribute('" + attribute + "', '" + value + "');", element);
     }
 
     /**
@@ -154,7 +161,7 @@ public class JavaScriptExecutorUtil {
      */
     public static String getAttribute(WebElement element, String attribute) {
         logger.debug("Getting attribute {} using JavaScript", attribute);
-        return (String) jsExecutor.executeScript("return arguments[0].getAttribute('" + attribute + "');", element);
+        return (String) getJsExecutor().executeScript("return arguments[0].getAttribute('" + attribute + "');", element);
     }
 
     /**
@@ -165,7 +172,7 @@ public class JavaScriptExecutorUtil {
      */
     public static String getInnerText(WebElement element) {
         logger.debug("Getting inner text using JavaScript");
-        return (String) jsExecutor.executeScript("return arguments[0].innerText;", element);
+        return (String) getJsExecutor().executeScript("return arguments[0].innerText;", element);
     }
 }
 

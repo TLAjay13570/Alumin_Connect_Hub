@@ -15,7 +15,7 @@ Feature: University Management
     When I click on "Add University" button
     And I enter university ID "test-auto-uni"
     And I enter university name "Test Auto University"
-    And I enter university logo URL "https://example.com/logo.png"
+    And I enter university logo URL "https://dummyimage.com/256x256/000/fff.png&text=University+Logo"
     And I click on "Create" or "Save" button
     Then I should see success message containing "created" or "added"
     And I should see university "Test Auto University" in the university list
@@ -26,7 +26,7 @@ Feature: University Management
     When I click on "Add University" button
     And I enter university ID "edit-test-uni"
     And I enter university name "Edit Test University"
-    And I enter university logo URL "https://example.com/editlogo.png"
+    And I enter university logo URL "https://dummyimage.com/256x256/222/fff.png&text=University+Logo"
     And I click on "Create" or "Save" button
     Then I should see success message containing "created" or "added"
     # Now edit it
@@ -42,7 +42,7 @@ Feature: University Management
     When I click on "Add University" button
     And I enter university ID "delete-test-uni"
     And I enter university name "Delete Test University"
-    And I enter university logo URL "https://example.com/deletelogo.png"
+    And I enter university logo URL "https://dummyimage.com/256x256/444/fff.png&text=University+Logo"
     And I click on "Create" or "Save" button
     Then I should see success message containing "created" or "added"
     # Now delete it

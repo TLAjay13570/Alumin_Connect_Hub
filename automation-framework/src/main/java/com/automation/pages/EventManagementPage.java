@@ -364,9 +364,28 @@ public class EventManagementPage extends BasePage {
         logger.debug("Checking if event '{}' exists in the list", eventTitle);
         try {
             WebDriverWaitUtil.staticWait(2);
-            String xpath = String.format("//h3[normalize-space()='%s']", eventTitle);
-            List<WebElement> elements = driver.findElements(By.xpath(xpath));
-            return elements.stream().anyMatch(WebElement::isDisplayed);
+            String escaped = eventTitle.replace("'", "\\'");
+
+            List<By> locators = List.of(
+                    // Exact match
+                    By.xpath(String.format("//h3[normalize-space()='%s']", eventTitle)),
+                    // Title in h tags (new UI may use different tags)
+                    By.xpath(String.format("//*[self::h1 or self::h2 or self::h3 or self::h4][contains(normalize-space(),'%s')]", eventTitle)),
+                    // Card/grid container
+                    By.xpath(String.format("//div[contains(@class,'rounded')]//*[contains(normalize-space(),'%s')]", eventTitle)),
+                    // Fallback: main content
+                    By.xpath(String.format("//*[@role='main']//*[contains(normalize-space(),'%s')]", eventTitle))
+            );
+
+            for (By locator : locators) {
+                List<WebElement> elements = driver.findElements(locator);
+                for (WebElement element : elements) {
+                    if (element != null && element.isDisplayed()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         } catch (Exception e) {
             logger.error("Error checking if event exists: {}", e.getMessage());
             return false;
@@ -383,9 +402,7 @@ public class EventManagementPage extends BasePage {
         logger.debug("Checking if event '{}' is NOT in the list", eventTitle);
         try {
             WebDriverWaitUtil.staticWait(2);
-            String xpath = String.format("//h3[normalize-space()='%s']", eventTitle);
-            List<WebElement> elements = driver.findElements(By.xpath(xpath));
-            return elements.isEmpty() || elements.stream().noneMatch(WebElement::isDisplayed);
+            return !isEventInList(eventTitle);
         } catch (Exception e) {
             logger.error("Error checking if event is not in list: {}", e.getMessage());
             return true;

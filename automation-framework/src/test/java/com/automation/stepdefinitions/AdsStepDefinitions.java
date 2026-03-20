@@ -19,22 +19,25 @@ public class AdsStepDefinitions {
     // Store the current ad title for reference with unique suffix
     private String currentAdTitle;
 
-    public AdsStepDefinitions() {
-        this.adsManagementPage = new AdsManagementPage();
+    private AdsManagementPage getAdsManagementPage() {
+        if (adsManagementPage == null) {
+            adsManagementPage = new AdsManagementPage();
+        }
+        return adsManagementPage;
     }
 
     @And("I navigate to the ads management page")
     public void i_navigate_to_the_ads_management_page() {
         logger.info("Navigating to ads management page");
         ExtentReportUtil.logInfo("Navigating to ads management page");
-        adsManagementPage.navigateToAdsPage();
+        getAdsManagementPage().navigateToAdsPage();
     }
 
     @When("I click on the Create Ad button")
     public void i_click_on_create_ad_button() {
         logger.info("Clicking on Create Ad button");
         ExtentReportUtil.logInfo("Clicking on Create Ad button");
-        adsManagementPage.clickCreateAdButton();
+        getAdsManagementPage().clickCreateAdButton();
     }
 
     @And("I enter ad title {string}")
@@ -44,42 +47,42 @@ public class AdsStepDefinitions {
         currentAdTitle = title + " " + timestamp;
         logger.info("Entering ad title: {}", currentAdTitle);
         ExtentReportUtil.logInfo("Entering ad title: " + currentAdTitle);
-        adsManagementPage.enterAdTitle(currentAdTitle);
+        getAdsManagementPage().enterAdTitle(currentAdTitle);
     }
 
     @And("I enter ad description {string}")
     public void i_enter_ad_description(String description) {
         logger.info("Entering ad description: {}", description);
         ExtentReportUtil.logInfo("Entering ad description: " + description);
-        adsManagementPage.enterAdDescription(description);
+        getAdsManagementPage().enterAdDescription(description);
     }
 
     @And("I select media type {string}")
     public void i_select_media_type(String mediaType) {
         logger.info("Selecting media type: {}", mediaType);
         ExtentReportUtil.logInfo("Selecting media type: " + mediaType);
-        adsManagementPage.selectMediaType(mediaType);
+        getAdsManagementPage().selectMediaType(mediaType);
     }
 
     @And("I enter media URL {string}")
     public void i_enter_media_url(String mediaUrl) {
         logger.info("Entering media URL: {}", mediaUrl);
         ExtentReportUtil.logInfo("Entering media URL: " + mediaUrl);
-        adsManagementPage.enterMediaUrl(mediaUrl);
+        getAdsManagementPage().enterMediaUrl(mediaUrl);
     }
 
     @And("I enter link URL {string}")
     public void i_enter_link_url(String linkUrl) {
         logger.info("Entering link URL: {}", linkUrl);
         ExtentReportUtil.logInfo("Entering link URL: " + linkUrl);
-        adsManagementPage.enterLinkUrl(linkUrl);
+        getAdsManagementPage().enterLinkUrl(linkUrl);
     }
 
     @And("I select ad placement {string}")
     public void i_select_ad_placement(String placement) {
         logger.info("Selecting ad placement: {}", placement);
         ExtentReportUtil.logInfo("Selecting ad placement: " + placement);
-        adsManagementPage.selectAdPlacement(placement);
+        getAdsManagementPage().selectAdPlacement(placement);
     }
 
     @And("I check {string} checkbox")
@@ -87,7 +90,7 @@ public class AdsStepDefinitions {
         logger.info("Checking checkbox: {}", checkboxLabel);
         ExtentReportUtil.logInfo("Checking checkbox: " + checkboxLabel);
         if (checkboxLabel.contains("all universities")) {
-            adsManagementPage.checkTargetAllUniversities();
+            getAdsManagementPage().checkTargetAllUniversities();
         }
     }
 
@@ -96,7 +99,7 @@ public class AdsStepDefinitions {
         logger.info("Unchecking checkbox: {}", checkboxLabel);
         ExtentReportUtil.logInfo("Unchecking checkbox: " + checkboxLabel);
         if (checkboxLabel.contains("all universities")) {
-            adsManagementPage.uncheckTargetAllUniversities();
+            getAdsManagementPage().uncheckTargetAllUniversities();
         }
     }
 
@@ -104,21 +107,21 @@ public class AdsStepDefinitions {
     public void i_select_target_university(String universityName) {
         logger.info("Selecting target university: {}", universityName);
         ExtentReportUtil.logInfo("Selecting target university: " + universityName);
-        adsManagementPage.selectTargetUniversity(universityName);
+        getAdsManagementPage().selectTargetUniversity(universityName);
     }
 
     @And("I click on \"Create Ad\" button in modal")
     public void i_click_on_create_ad_button_in_modal() {
         logger.info("Clicking Create Ad button in modal");
         ExtentReportUtil.logInfo("Clicking Create Ad button in modal");
-        adsManagementPage.clickCreateAdButtonInModal();
+        getAdsManagementPage().clickCreateAdButtonInModal();
     }
 
     @And("I click on \"Update Ad\" button in modal")
     public void i_click_on_update_ad_button_in_modal() {
         logger.info("Clicking Update Ad button in modal");
         ExtentReportUtil.logInfo("Clicking Update Ad button in modal");
-        adsManagementPage.clickUpdateAdButtonInModal();
+        getAdsManagementPage().clickUpdateAdButtonInModal();
     }
 
     @Then("I should see ad {string} in the ads list")
@@ -129,7 +132,7 @@ public class AdsStepDefinitions {
         logger.info("Verifying ad '{}' exists in the list", titleToCheck);
         ExtentReportUtil.logInfo("Verifying ad '" + titleToCheck + "' exists in the list");
         
-        boolean adExists = adsManagementPage.isAdInList(titleToCheck);
+        boolean adExists = getAdsManagementPage().isAdInList(titleToCheck);
         Assert.assertTrue(adExists, "Ad '" + titleToCheck + "' was not found in the ads list");
         
         logger.info("Ad '{}' found in the list", titleToCheck);
@@ -144,7 +147,7 @@ public class AdsStepDefinitions {
         logger.info("Verifying ad '{}' does NOT exist in the list", titleToCheck);
         ExtentReportUtil.logInfo("Verifying ad '" + titleToCheck + "' does NOT exist in the list");
         
-        boolean adNotExists = adsManagementPage.isAdNotInList(titleToCheck);
+        boolean adNotExists = getAdsManagementPage().isAdNotInList(titleToCheck);
         Assert.assertTrue(adNotExists, "Ad '" + titleToCheck + "' should not be in the ads list");
         
         logger.info("Ad '{}' successfully removed from the list", titleToCheck);
@@ -159,7 +162,7 @@ public class AdsStepDefinitions {
         logger.info("Verifying ad '{}' has status '{}'", titleToCheck, expectedStatus);
         ExtentReportUtil.logInfo("Verifying ad '" + titleToCheck + "' has status '" + expectedStatus + "'");
         
-        boolean statusMatch = adsManagementPage.isAdWithStatus(titleToCheck, expectedStatus);
+        boolean statusMatch = getAdsManagementPage().isAdWithStatus(titleToCheck, expectedStatus);
         Assert.assertTrue(statusMatch, "Ad '" + titleToCheck + "' does not have status '" + expectedStatus + "'");
         
         logger.info("Ad '{}' has expected status '{}'", titleToCheck, expectedStatus);
@@ -173,7 +176,7 @@ public class AdsStepDefinitions {
                 ? currentAdTitle : adTitle;
         logger.info("Clicking edit button for ad: {}", titleToEdit);
         ExtentReportUtil.logInfo("Clicking edit button for ad: " + titleToEdit);
-        adsManagementPage.clickEditButtonForAd(titleToEdit);
+        getAdsManagementPage().clickEditButtonForAd(titleToEdit);
     }
 
     @And("I update ad title to {string}")
@@ -183,14 +186,14 @@ public class AdsStepDefinitions {
         currentAdTitle = newTitle + " " + timestamp;
         logger.info("Updating ad title to: {}", currentAdTitle);
         ExtentReportUtil.logInfo("Updating ad title to: " + currentAdTitle);
-        adsManagementPage.updateAdTitle(currentAdTitle);
+        getAdsManagementPage().updateAdTitle(currentAdTitle);
     }
 
     @And("I update ad description to {string}")
     public void i_update_ad_description_to(String newDescription) {
         logger.info("Updating ad description to: {}", newDescription);
         ExtentReportUtil.logInfo("Updating ad description to: " + newDescription);
-        adsManagementPage.updateAdDescription(newDescription);
+        getAdsManagementPage().updateAdDescription(newDescription);
     }
 
     @When("I click on toggle visibility button for ad {string}")
@@ -200,7 +203,7 @@ public class AdsStepDefinitions {
                 ? currentAdTitle : adTitle;
         logger.info("Clicking toggle visibility button for ad: {}", titleToToggle);
         ExtentReportUtil.logInfo("Clicking toggle visibility button for ad: " + titleToToggle);
-        adsManagementPage.clickToggleVisibilityButtonForAd(titleToToggle);
+        getAdsManagementPage().clickToggleVisibilityButtonForAd(titleToToggle);
     }
 
     @When("I click on delete button for ad {string}")
@@ -210,7 +213,7 @@ public class AdsStepDefinitions {
                 ? currentAdTitle : adTitle;
         logger.info("Clicking delete button for ad: {}", titleToDelete);
         ExtentReportUtil.logInfo("Clicking delete button for ad: " + titleToDelete);
-        adsManagementPage.clickDeleteButtonForAd(titleToDelete);
+        getAdsManagementPage().clickDeleteButtonForAd(titleToDelete);
     }
 
     @Then("I should see error message containing {string} or {string}")
@@ -218,9 +221,9 @@ public class AdsStepDefinitions {
         logger.info("Verifying error message contains '{}' or '{}'", text1, text2);
         ExtentReportUtil.logInfo("Verifying error message contains '" + text1 + "' or '" + text2 + "'");
 
-        String actualMessage = adsManagementPage.getToastMessage();
-        boolean containsText1 = adsManagementPage.isToastMessageContaining(text1);
-        boolean containsText2 = adsManagementPage.isToastMessageContaining(text2);
+        String actualMessage = getAdsManagementPage().getToastMessage();
+        boolean containsText1 = getAdsManagementPage().isToastMessageContaining(text1);
+        boolean containsText2 = getAdsManagementPage().isToastMessageContaining(text2);
 
         Assert.assertTrue(containsText1 || containsText2,
             "Error message does not contain '" + text1 + "' or '" + text2 + "'. Actual: '" + actualMessage + "'");
@@ -238,7 +241,7 @@ public class AdsStepDefinitions {
         ExtentReportUtil.logInfo("Checking and deleting ad '" + adTitle + "' if it exists");
         
         // Check if any ad with this title prefix exists (to handle timestamp suffix)
-        boolean deleted = adsManagementPage.deleteAdIfExists(adTitle);
+        boolean deleted = getAdsManagementPage().deleteAdIfExists(adTitle);
         
         if (deleted) {
             logger.info("Ad starting with '{}' was found and deleted", adTitle);

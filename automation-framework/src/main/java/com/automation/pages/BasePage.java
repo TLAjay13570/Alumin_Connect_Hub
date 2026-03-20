@@ -38,12 +38,8 @@ public class BasePage {
         while (retryCount < maxRetries) {
             try {
                 driver.get(url);
-                // Wait a moment to ensure page is loaded
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                // Wait for DOM readiness instead of hard-coded sleeps.
+                WebDriverWaitUtil.waitForPageToLoad();
                 logger.debug("Successfully navigated to: {}", url);
                 return;
             } catch (Exception e) {
@@ -52,12 +48,8 @@ public class BasePage {
                 logger.warn("Navigation attempt {} failed: {}", retryCount, e.getMessage());
                 
                 if (retryCount < maxRetries) {
-                    try {
-                        logger.info("Retrying navigation in 2 seconds...");
-                        Thread.sleep(2000);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    }
+                    logger.info("Retrying navigation in 2 seconds...");
+                    WebDriverWaitUtil.staticWait(2);
                 }
             }
         }

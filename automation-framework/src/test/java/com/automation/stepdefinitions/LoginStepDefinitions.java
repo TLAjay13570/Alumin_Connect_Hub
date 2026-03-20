@@ -17,15 +17,18 @@ public class LoginStepDefinitions {
     private static final Logger logger = LogManager.getLogger(LoginStepDefinitions.class);
     private LoginPage loginPage;
 
-    public LoginStepDefinitions() {
-        this.loginPage = new LoginPage();
+    private LoginPage getLoginPage() {
+        if (loginPage == null) {
+            loginPage = new LoginPage();
+        }
+        return loginPage;
     }
 
     @Given("I navigate to the login page")
     public void i_navigate_to_the_login_page() {
         logger.info("Navigating to login page");
         ExtentReportUtil.logInfo("Navigating to login page");
-        loginPage.navigateToLoginPage();
+        getLoginPage().navigateToLoginPage();
     }
 
     @When("I login as {string} using credentials from config")
@@ -34,13 +37,13 @@ public class LoginStepDefinitions {
         ExtentReportUtil.logInfo("Logging in as " + userType + " using config credentials");
         
         if (userType.equalsIgnoreCase("super admin") || userType.equalsIgnoreCase("superadmin")) {
-            loginPage.loginAsSuperAdmin();
+            getLoginPage().loginAsSuperAdmin();
         } else if (userType.equalsIgnoreCase("admin")) {
             // Login with admin credentials from config
-            loginPage.loginAsAdmin();
+            getLoginPage().loginAsAdmin();
         } else {
             logger.warn("Unknown user type: {}, attempting super admin login", userType);
-            loginPage.loginAsSuperAdmin();
+            getLoginPage().loginAsSuperAdmin();
         }
     }
 
@@ -53,7 +56,7 @@ public class LoginStepDefinitions {
         WebDriverWaitUtil.staticWait(3);
         
         // Verify we're no longer on login page (URL should change)
-        boolean loginSuccess = loginPage.isLoginSuccessful();
+        boolean loginSuccess = getLoginPage().isLoginSuccessful();
         Assert.assertTrue(loginSuccess, "Login was not successful - still on login page or error displayed");
         
         logger.info("Login verified successfully");
@@ -65,7 +68,7 @@ public class LoginStepDefinitions {
         logger.info("Verifying '{}' text is displayed on page", expectedText);
         ExtentReportUtil.logInfo("Verifying '" + expectedText + "' text is displayed");
         
-        boolean isTextDisplayed = loginPage.isTextDisplayedOnPage(expectedText);
+        boolean isTextDisplayed = getLoginPage().isTextDisplayedOnPage(expectedText);
         Assert.assertTrue(isTextDisplayed, "Expected text '" + expectedText + "' is not displayed on the page.");
         
         logger.info("Text '{}' verified successfully", expectedText);

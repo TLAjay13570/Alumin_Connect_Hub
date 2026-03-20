@@ -120,15 +120,25 @@ public class AdsManagementPage extends BasePage {
     public void selectMediaType(String mediaType) {
         logger.info("Selecting media type: {}", mediaType);
         try {
-            // Find the media type select trigger - the parent div contains both label and button
-            WebElement trigger = driver.findElement(By.xpath("//label[contains(text(),'Media Type')]/..//button[@role='combobox']"));
+            // Find the media type select trigger inside the modal.
+            // UI text/labels changed recently, so we match using generic "Media" label first and fall back to the first combobox.
+            WebElement trigger;
+            try {
+                trigger = driver.findElement(By.xpath(
+                        "//div[@role='dialog']//label[contains(.,'Media')]/following::button[@role='combobox'][1]"));
+            } catch (Exception ignored) {
+                trigger = driver.findElement(By.xpath("//div[@role='dialog']//button[@role='combobox'][1]"));
+            }
             WebDriverWaitUtil.waitForElementClickable(trigger);
             click(trigger);
             WebDriverWaitUtil.staticWait(1);
 
-            // Select the option - look for the option text
-            String optionXpath = String.format("//div[@role='option' and contains(.,'%s')]", mediaType);
-            WebElement option = WebDriverWaitUtil.waitForElementClickable(By.xpath(optionXpath));
+            // Select the option - handle both div-based and aria-based option rendering
+            List<By> optionLocators = List.of(
+                    By.xpath("//div[@role='dialog']//div[@role='listbox']//div[@role='option' and contains(.,'" + mediaType + "')]"),
+                    By.xpath("//div[@role='option' and contains(.,'" + mediaType + "')]")
+            );
+            WebElement option = WebDriverWaitUtil.waitForAnyElementVisible(optionLocators);
             click(option);
             logger.info("Selected media type: {}", mediaType);
             WebDriverWaitUtil.staticWait(1);
@@ -144,7 +154,17 @@ public class AdsManagementPage extends BasePage {
      */
     public void enterMediaUrl(String mediaUrl) {
         logger.info("Entering media URL: {}", mediaUrl);
-        WebElement input = WebDriverWaitUtil.waitForElementVisible(mediaUrlInput);
+        // Field id/label changed; locate the input by multiple heuristics inside the modal.
+        List<By> candidates = List.of(
+                By.id("mediaUrl"),
+                By.id("mediaURL"),
+                By.id("media_url"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Media')]/following::input[1]"),
+                By.xpath("//div[@role='dialog']//input[contains(@placeholder,'Media') or contains(@placeholder,'media') or contains(@placeholder,'URL') or contains(@aria-label,'Media')][1]"),
+                By.xpath("//div[@role='dialog']//input[@type='url' or contains(@type,'url')][1]"),
+                By.xpath("//div[@role='dialog']//input[contains(@id,'media') or contains(@name,'media')][1]")
+        );
+        WebElement input = WebDriverWaitUtil.waitForAnyElementVisible(candidates);
         input.clear();
         sendKeys(input, mediaUrl);
     }
@@ -156,7 +176,14 @@ public class AdsManagementPage extends BasePage {
      */
     public void enterLinkUrl(String linkUrl) {
         logger.info("Entering link URL: {}", linkUrl);
-        WebElement input = WebDriverWaitUtil.waitForElementVisible(linkUrlInput);
+        List<By> candidates = List.of(
+                By.id("linkUrl"),
+                By.id("linkURL"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Link') or contains(.,'Learn')]/following::input[1]"),
+                By.xpath("//div[@role='dialog']//input[contains(@placeholder,'Link') or contains(@placeholder,'Learn') or contains(@placeholder,'https') or contains(@placeholder,'URL')][1]"),
+                By.xpath("//div[@role='dialog']//input[@type='url' or contains(@type,'url')][2]")
+        );
+        WebElement input = WebDriverWaitUtil.waitForAnyElementVisible(candidates);
         input.clear();
         sendKeys(input, linkUrl);
     }

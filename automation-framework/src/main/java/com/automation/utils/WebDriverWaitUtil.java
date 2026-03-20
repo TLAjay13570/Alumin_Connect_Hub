@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
@@ -26,6 +27,18 @@ public class WebDriverWaitUtil {
         WebDriver driver = DriverFactory.getCurrentDriver();
         int explicitWait = ConfigReader.getExplicitWait();
         return new WebDriverWait(driver, Duration.ofSeconds(explicitWait));
+    }
+
+    /**
+     * Wait for the document readyState to match the given value.
+     * Useful to reduce reliance on hard-coded sleeps.
+     */
+    public static boolean waitForDocumentReadyState(String expectedState) {
+        logger.debug("Waiting for document.readyState='{}'", expectedState);
+        return getWait().until(driver -> {
+            Object state = ((JavascriptExecutor) driver).executeScript("return document.readyState;");
+            return state != null && expectedState.equalsIgnoreCase(state.toString());
+        });
     }
 
     /**
@@ -140,6 +153,30 @@ public class WebDriverWaitUtil {
     }
 
     /**
+     * Waits for the current URL to NOT contain the given fragment.
+     *
+     * @param fragment Fragment that must not appear in the URL
+     * @return true when URL no longer contains the fragment
+     */
+    public static boolean waitForUrlToNotContain(String fragment) {
+        return waitForUrlToNotContain(fragment, ConfigReader.getExplicitWait());
+    }
+
+    /**
+     * Waits for the current URL to NOT contain the given fragment.
+     *
+     * @param fragment      Fragment that must not appear in the URL
+     * @param timeoutSeconds Timeout in seconds
+     * @return true when URL no longer contains the fragment
+     */
+    public static boolean waitForUrlToNotContain(String fragment, int timeoutSeconds) {
+        logger.debug("Waiting for URL to not contain: {}", fragment);
+        WebDriver driver = DriverFactory.getCurrentDriver();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+        return wait.until(d -> !d.getCurrentUrl().contains(fragment));
+    }
+
+    /**
      * Waits for title to contain text
      *
      * @param text Text to check in title
@@ -176,7 +213,7 @@ public class WebDriverWaitUtil {
      */
     public static void waitForPageToLoad() {
         logger.debug("Waiting for page to load");
-        staticWait(2);
+        waitForDocumentReadyState("complete");
     }
 
     /**
@@ -185,12 +222,35 @@ public class WebDriverWaitUtil {
      * @param seconds Seconds to wait
      */
     public static void staticWait(int seconds) {
-        try {
-            logger.debug("Static wait for {} seconds", seconds);
-            Thread.sleep(seconds * 1000L);
-        } catch (InterruptedException e) {
-            logger.error("Interrupted during static wait: {}", e.getMessage());
-            Thread.currentThread().interrupt();
+        logger.debug("Static wait for {} seconds", seconds);
+        WebDriver driver = DriverFactory.getCurrentDriver();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(seconds));
+        // Wait until timeout without relying on Thread.sleep.
+        wait.until(d -> true);
+    }
+
+    /**
+     * Waits for the first visible element among the provided locators.
+     *
+     * @param locators Possible locators for the element
+     * @return Visible WebElement
+     */
+    public static WebElement waitForAnyElementVisible(List<By> locators) {
+        if (locators == null || locators.isEmpty()) {
+            throw new IllegalArgumentException("locators must not be null/empty");
         }
+
+        logger.debug("Waiting for any element to be visible ({} locators)", locators.size());
+        return getWait().until(driver -> {
+            for (By locator : locators) {
+                List<WebElement> elements = driver.findElements(locator);
+                for (WebElement element : elements) {
+                    if (element != null && element.isDisplayed()) {
+                        return element;
+                    }
+                }
+            }
+            return null;
+        });
     }
 }

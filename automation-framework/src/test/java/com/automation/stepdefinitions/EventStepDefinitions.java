@@ -19,22 +19,25 @@ public class EventStepDefinitions {
     // Store the current event title for reference with unique suffix
     private String currentEventTitle;
 
-    public EventStepDefinitions() {
-        this.eventManagementPage = new EventManagementPage();
+    private EventManagementPage getEventManagementPage() {
+        if (eventManagementPage == null) {
+            eventManagementPage = new EventManagementPage();
+        }
+        return eventManagementPage;
     }
 
     @And("I navigate to the events management page")
     public void i_navigate_to_the_events_management_page() {
         logger.info("Navigating to events management page");
         ExtentReportUtil.logInfo("Navigating to events management page");
-        eventManagementPage.navigateToEventsPage();
+        getEventManagementPage().navigateToEventsPage();
     }
 
     @When("I click on the Create Event button")
     public void i_click_on_create_event_button() {
         logger.info("Clicking on Create Event button");
         ExtentReportUtil.logInfo("Clicking on Create Event button");
-        eventManagementPage.clickCreateEventButton();
+        getEventManagementPage().clickCreateEventButton();
     }
 
     @And("I enter event title {string}")
@@ -44,63 +47,63 @@ public class EventStepDefinitions {
         currentEventTitle = title + " " + timestamp;
         logger.info("Entering event title: {}", currentEventTitle);
         ExtentReportUtil.logInfo("Entering event title: " + currentEventTitle);
-        eventManagementPage.enterEventTitle(currentEventTitle);
+        getEventManagementPage().enterEventTitle(currentEventTitle);
     }
 
     @And("I enter event description {string}")
     public void i_enter_event_description(String description) {
         logger.info("Entering event description: {}", description);
         ExtentReportUtil.logInfo("Entering event description: " + description);
-        eventManagementPage.enterEventDescription(description);
+        getEventManagementPage().enterEventDescription(description);
     }
 
     @And("I enter event date {string}")
     public void i_enter_event_date(String date) {
         logger.info("Entering event date: {}", date);
         ExtentReportUtil.logInfo("Entering event date: " + date);
-        eventManagementPage.enterEventDate(date);
+        getEventManagementPage().enterEventDate(date);
     }
 
     @And("I enter event time {string}")
     public void i_enter_event_time(String time) {
         logger.info("Entering event time: {}", time);
         ExtentReportUtil.logInfo("Entering event time: " + time);
-        eventManagementPage.enterEventTime(time);
+        getEventManagementPage().enterEventTime(time);
     }
 
     @And("I enter event location {string}")
     public void i_enter_event_location(String location) {
         logger.info("Entering event location: {}", location);
         ExtentReportUtil.logInfo("Entering event location: " + location);
-        eventManagementPage.enterEventLocation(location);
+        getEventManagementPage().enterEventLocation(location);
     }
 
     @And("I toggle virtual event switch")
     public void i_toggle_virtual_event_switch() {
         logger.info("Toggling virtual event switch");
         ExtentReportUtil.logInfo("Toggling virtual event switch");
-        eventManagementPage.toggleVirtualEvent();
+        getEventManagementPage().toggleVirtualEvent();
     }
 
     @And("I select event category {string}")
     public void i_select_event_category(String category) {
         logger.info("Selecting event category: {}", category);
         ExtentReportUtil.logInfo("Selecting event category: " + category);
-        eventManagementPage.selectCategory(category);
+        getEventManagementPage().selectCategory(category);
     }
 
     @And("I enter event image URL {string}")
     public void i_enter_event_image_url(String imageUrl) {
         logger.info("Entering event image URL: {}", imageUrl);
         ExtentReportUtil.logInfo("Entering event image URL: " + imageUrl);
-        eventManagementPage.enterImageUrl(imageUrl);
+        getEventManagementPage().enterImageUrl(imageUrl);
     }
 
     @And("I click on \"Create Event\" button in modal")
     public void i_click_on_create_event_button_in_modal() {
         logger.info("Clicking Create Event button in modal");
         ExtentReportUtil.logInfo("Clicking Create Event button in modal");
-        eventManagementPage.clickCreateEventButtonInModal();
+        getEventManagementPage().clickCreateEventButtonInModal();
     }
 
     @Then("I should see event {string} in the events list")
@@ -111,7 +114,7 @@ public class EventStepDefinitions {
         logger.info("Verifying event '{}' exists in the list", titleToCheck);
         ExtentReportUtil.logInfo("Verifying event '" + titleToCheck + "' exists in the list");
         
-        boolean eventExists = eventManagementPage.isEventInList(titleToCheck);
+        boolean eventExists = getEventManagementPage().isEventInList(titleToCheck);
         Assert.assertTrue(eventExists, "Event '" + titleToCheck + "' was not found in the events list");
         
         logger.info("Event '{}' found in the list", titleToCheck);
@@ -126,7 +129,7 @@ public class EventStepDefinitions {
         logger.info("Verifying event '{}' does NOT exist in the list", titleToCheck);
         ExtentReportUtil.logInfo("Verifying event '" + titleToCheck + "' does NOT exist in the list");
         
-        boolean eventNotExists = eventManagementPage.isEventNotInList(titleToCheck);
+        boolean eventNotExists = getEventManagementPage().isEventNotInList(titleToCheck);
         Assert.assertTrue(eventNotExists, "Event '" + titleToCheck + "' should not be in the events list");
         
         logger.info("Event '{}' successfully removed from the list", titleToCheck);
@@ -143,7 +146,7 @@ public class EventStepDefinitions {
         ExtentReportUtil.logInfo("Checking and deleting event '" + eventTitle + "' if it exists");
         
         // Check if any event with this title prefix exists (to handle timestamp suffix)
-        boolean deleted = eventManagementPage.deleteEventIfExists(eventTitle);
+        boolean deleted = getEventManagementPage().deleteEventIfExists(eventTitle);
         
         if (deleted) {
             logger.info("Event starting with '{}' was found and deleted", eventTitle);
