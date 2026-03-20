@@ -82,7 +82,8 @@ public class UserManagementPage extends BasePage {
         logger.info("Navigating to users management page");
         String usersUrl = ConfigReader.getBaseUrl() + "/superadmin/users";
         navigateTo(usersUrl);
-        WebDriverWaitUtil.staticWait(3);
+        WebDriverWaitUtil.waitForPageToLoad();
+        WebDriverWaitUtil.waitForElementClickable(By.xpath("//button[contains(.,'Add User')]"));
     }
 
     /**
@@ -92,13 +93,8 @@ public class UserManagementPage extends BasePage {
         logger.info("Clicking Add User button");
         WebElement btn = WebDriverWaitUtil.waitForElementClickable(addUserButton);
         click(btn);
-        // Wait for modal to open
-        try {
-            WebDriverWaitUtil.staticWait(2);
-            WebDriverWaitUtil.waitForElementVisible(By.id("name"));
-        } catch (Exception e) {
-            logger.debug("Modal open wait: {}", e.getMessage());
-        }
+        WebDriverWaitUtil.waitForElementVisible(By.xpath("//div[@role='dialog']"));
+        WebDriverWaitUtil.waitForElementVisible(By.id("name"));
         logger.info("Modal dialog opened successfully");
     }
 
@@ -110,20 +106,15 @@ public class UserManagementPage extends BasePage {
     public void selectRole(String role) {
         logger.info("Selecting role: {}", role);
         try {
-            // Click on the role select trigger (combobox)
-            WebElement trigger = driver.findElement(By.xpath("//button[@role='combobox']"));
-            WebDriverWaitUtil.waitForElementClickable(trigger);
+            WebElement trigger = WebDriverWaitUtil.waitForElementClickable(
+                    By.xpath("//div[@role='dialog']//label[contains(.,'Role')]/following::button[1]"));
             click(trigger);
-            WebDriverWaitUtil.staticWait(1);
 
-            // Select the role option from the listbox
-            // Options are rendered as <div role="option"> with text inside
-            String optionXpath = String.format("//div[@role='listbox']//div[@role='option' and contains(.,'%s')]", role);
-            WebDriverWaitUtil.staticWait(1);
+            String optionXpath = String.format(
+                    "//div[@role='option' and contains(normalize-space(),\"%s\")]", role);
             WebElement option = WebDriverWaitUtil.waitForElementClickable(By.xpath(optionXpath));
             click(option);
             logger.info("Selected role: {}", role);
-            WebDriverWaitUtil.staticWait(1);
         } catch (Exception e) {
             logger.error("Error selecting role: {}", e.getMessage());
             throw new RuntimeException("Could not select role: " + role, e);
@@ -171,21 +162,15 @@ public class UserManagementPage extends BasePage {
     public void selectUniversity(String universityName) {
         logger.info("Selecting university: {}", universityName);
         try {
-            // Find the university select trigger (second combobox in the form)
-            // Using a more specific XPath to target the university combobox
-            List<WebElement> comboboxes = driver.findElements(By.xpath("//button[@role='combobox']"));
-            WebElement trigger = comboboxes.size() > 1 ? comboboxes.get(1) : comboboxes.get(0);
-            WebDriverWaitUtil.waitForElementClickable(trigger);
+            WebElement trigger = WebDriverWaitUtil.waitForElementClickable(
+                    By.xpath("//div[@role='dialog']//label[contains(.,'University')]/following::button[1]"));
             click(trigger);
-            WebDriverWaitUtil.staticWait(1);
 
-            // Select the university option from the listbox
-            String optionXpath = String.format("//div[@role='listbox']//div[@role='option' and contains(.,'%s')]", universityName);
-            WebDriverWaitUtil.staticWait(1);
+            String optionXpath = String.format(
+                    "//div[@role='option' and contains(normalize-space(),\"%s\")]", universityName);
             WebElement option = WebDriverWaitUtil.waitForElementClickable(By.xpath(optionXpath));
             click(option);
             logger.info("Selected university: {}", universityName);
-            WebDriverWaitUtil.staticWait(1);
         } catch (Exception e) {
             logger.error("Error selecting university: {}", e.getMessage());
             throw new RuntimeException("Could not select university: " + universityName, e);
@@ -220,7 +205,7 @@ public class UserManagementPage extends BasePage {
     public void toggleMentorOn() {
         logger.info("Toggling mentor status on");
         try {
-            WebElement mentorToggle = driver.findElement(By.id("mentor"));
+            WebElement mentorToggle = WebDriverWaitUtil.waitForElementClickable(By.id("mentor"));
             String currentState = mentorToggle.getAttribute("data-state");
             if (!"checked".equals(currentState)) {
                 click(mentorToggle);
@@ -241,8 +226,7 @@ public class UserManagementPage extends BasePage {
         WebElement btn = WebDriverWaitUtil.waitForElementClickable(createUserButton);
         click(btn);
         logger.info("Clicked Create User button");
-        // Wait for modal to close and toast to appear
-        WebDriverWaitUtil.staticWait(3);
+        WebDriverWaitUtil.waitForElementInvisible(By.xpath("//div[@role='dialog']"));
     }
 
     /**
@@ -253,13 +237,12 @@ public class UserManagementPage extends BasePage {
     public void clickToggleStatusButtonForUser(String userName) {
         logger.info("Clicking toggle status button for user: {}", userName);
         try {
-            WebDriverWaitUtil.staticWait(2);
-            // Find the row with the user name, then find the Power button in the Actions column
-            String xpath = String.format("//td[normalize-space()='%s']/following-sibling::td//button[.//*[name()='svg' and contains(@class,'lucide-power')]] | //tr[td[normalize-space()='%s']]//button[contains(@class,'ghost')][1]", userName, userName);
+            String row = String.format("//tr[td[1][contains(normalize-space(),\"%s\")]]", userName);
+            String xpath = row + "//button[.//*[name()='svg' and contains(@class,'lucide-power')]]"
+                    + " | " + row + "//button[@title='Disable user' or @title='Enable user']";
             WebElement toggleButton = WebDriverWaitUtil.waitForElementClickable(By.xpath(xpath));
             click(toggleButton);
             logger.info("Clicked toggle status button for user: {}", userName);
-            WebDriverWaitUtil.staticWait(2);
         } catch (Exception e) {
             logger.error("Error finding toggle button for user {}: {}", userName, e.getMessage());
             throw new RuntimeException("Could not find toggle button for user: " + userName, e);
@@ -274,13 +257,11 @@ public class UserManagementPage extends BasePage {
     public void clickDeleteButtonForUser(String userName) {
         logger.info("Clicking delete button for user: {}", userName);
         try {
-            WebDriverWaitUtil.staticWait(2);
-            // Find the row with the user name, then find the Trash button (destructive style)
-            String xpath = String.format("//td[normalize-space()='%s']/following-sibling::td//button[contains(@class,'destructive')] | //tr[td[normalize-space()='%s']]//button[contains(@class,'destructive')]", userName, userName);
+            String row = String.format("//tr[td[1][contains(normalize-space(),\"%s\")]]", userName);
+            String xpath = row + "//button[contains(@class,'destructive') or .//*[contains(@class,'lucide-trash')]]";
             WebElement deleteButton = WebDriverWaitUtil.waitForElementClickable(By.xpath(xpath));
             click(deleteButton);
             logger.info("Clicked delete button for user: {}", userName);
-            WebDriverWaitUtil.staticWait(1);
         } catch (Exception e) {
             logger.error("Error finding delete button for user {}: {}", userName, e.getMessage());
             throw new RuntimeException("Could not find delete button for user: " + userName, e);
@@ -415,8 +396,7 @@ public class UserManagementPage extends BasePage {
     public boolean isUserInList(String userName) {
         logger.debug("Checking if user '{}' exists in the list", userName);
         try {
-            WebDriverWaitUtil.staticWait(2);
-            String xpath = String.format("//td[normalize-space()='%s']", userName);
+            String xpath = String.format("//tr[td[1][contains(normalize-space(),\"%s\")]]", userName);
             List<WebElement> elements = driver.findElements(By.xpath(xpath));
             boolean found = elements.stream().anyMatch(WebElement::isDisplayed);
             if (found) {
@@ -439,7 +419,6 @@ public class UserManagementPage extends BasePage {
      */
     public boolean isUserNotInList(String userName) {
         logger.debug("Checking if user '{}' does not exist in the list", userName);
-        WebDriverWaitUtil.staticWait(2);
         return !isUserInList(userName);
     }
 

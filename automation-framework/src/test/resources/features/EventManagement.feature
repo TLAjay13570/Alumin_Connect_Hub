@@ -15,8 +15,9 @@ Feature: Event Management
     When I click on the Create Event button
     And I enter event title "Test Automation Event"
     And I enter event description "This is a test event created by automation"
-    And I enter event date "12/31/2025"
+    And I enter event date "12/31/2030"
     And I enter event time "10:00 AM"
+    And I enter event end time "11:00 AM"
     And I enter event location "Test Location"
     And I select event category "Networking"
     And I click on "Create Event" button in modal

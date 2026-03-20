@@ -2,7 +2,6 @@ package com.automation.stepdefinitions;
 
 import com.automation.pages.LoginPage;
 import com.automation.utils.ExtentReportUtil;
-import com.automation.utils.WebDriverWaitUtil;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -52,10 +51,6 @@ public class LoginStepDefinitions {
         logger.info("Verifying successful login");
         ExtentReportUtil.logInfo("Verifying successful login");
         
-        // Wait for login to complete and page to load
-        WebDriverWaitUtil.staticWait(3);
-        
-        // Verify we're no longer on login page (URL should change)
         boolean loginSuccess = getLoginPage().isLoginSuccessful();
         Assert.assertTrue(loginSuccess, "Login was not successful - still on login page or error displayed");
         

@@ -746,9 +746,19 @@ public class UniversityManagementPage extends BasePage {
      * Waits until a university card disappears from the list.
      * Useful for delete flows where the toast can appear before the UI refreshes.
      */
+    /**
+     * Waits until a university name appears in the list (after create/update and list refresh).
+     */
+    public boolean waitForUniversityInList(String universityName, int timeoutSeconds) {
+        logger.debug("Waiting up to {}s for university '{}' in list", timeoutSeconds, universityName);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+        return wait.until(d -> isUniversityPresentWithoutWait(universityName));
+    }
+
     public boolean waitForUniversityNotInList(String universityName) {
         logger.debug("Waiting for university '{}' to disappear from list", universityName);
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()));
+        int timeout = Math.max(45, ConfigReader.getExplicitWait() * 2);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(timeout));
         return wait.until(d -> !isUniversityPresentWithoutWait(universityName));
     }
 

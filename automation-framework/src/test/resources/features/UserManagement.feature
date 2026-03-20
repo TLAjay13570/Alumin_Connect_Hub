@@ -1,4 +1,4 @@
-@Users @SuperAdmin
+@Users @SuperAdmin @requires-user-api
 Feature: User Management
   As a super admin
   I want to manage users across the platform

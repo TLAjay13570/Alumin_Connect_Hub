@@ -3,6 +3,7 @@ package com.automation.stepdefinitions;
 import com.automation.pages.UniversityManagementPage;
 import com.automation.pages.UserManagementPage;
 import com.automation.utils.ExtentReportUtil;
+import com.automation.utils.ToastUtil;
 import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -149,8 +150,8 @@ public class UniversityStepDefinitions {
         logger.info("Verifying success message contains '{}' or '{}'", text1, text2);
         ExtentReportUtil.logInfo("Verifying success message contains '" + text1 + "' or '" + text2 + "'");
         
-        // Wait for the toast message to update (delete flows can temporarily keep the previous toast visible).
-        String actualMessage = getUniversityManagementPage().waitForSuccessMessageContainingEither(text1, text2);
+        // Shared toast assertion for all features (Users, Ads, University, etc.)
+        String actualMessage = ToastUtil.waitForToastContainingEither(text1, text2);
         logger.info("Actual success message: '{}'", actualMessage);
 
         boolean containsText1 = actualMessage.toLowerCase().contains(text1.toLowerCase());
@@ -167,7 +168,7 @@ public class UniversityStepDefinitions {
         ExtentReportUtil.logInfo("Verifying university '" + universityName + "' exists in the list");
 
         String mappedName = mapUniversityName(universityName);
-        boolean exists = getUniversityManagementPage().isUniversityInList(mappedName);
+        boolean exists = getUniversityManagementPage().waitForUniversityInList(mappedName, 30);
         Assert.assertTrue(exists, "University '" + universityName + "' is not found in the list");
         ExtentReportUtil.logPass("University '" + universityName + "' found in the list");
     }

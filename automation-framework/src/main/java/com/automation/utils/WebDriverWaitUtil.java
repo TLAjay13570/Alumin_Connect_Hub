@@ -236,14 +236,23 @@ public class WebDriverWaitUtil {
      * @return Visible WebElement
      */
     public static WebElement waitForAnyElementVisible(List<By> locators) {
+        return waitForAnyElementVisible(locators, ConfigReader.getExplicitWait());
+    }
+
+    /**
+     * Waits for the first visible element among the provided locators (custom timeout).
+     */
+    public static WebElement waitForAnyElementVisible(List<By> locators, int timeoutSeconds) {
         if (locators == null || locators.isEmpty()) {
             throw new IllegalArgumentException("locators must not be null/empty");
         }
 
-        logger.debug("Waiting for any element to be visible ({} locators)", locators.size());
-        return getWait().until(driver -> {
+        logger.debug("Waiting for any element to be visible ({} locators, {}s)", locators.size(), timeoutSeconds);
+        WebDriver driver = DriverFactory.getCurrentDriver();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+        return wait.until(d -> {
             for (By locator : locators) {
-                List<WebElement> elements = driver.findElements(locator);
+                List<WebElement> elements = d.findElements(locator);
                 for (WebElement element : elements) {
                     if (element != null && element.isDisplayed()) {
                         return element;

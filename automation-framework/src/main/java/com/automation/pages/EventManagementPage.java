@@ -1,460 +1,355 @@
 package com.automation.pages;
 
 import com.automation.utils.ConfigReader;
+import com.automation.utils.JavaScriptExecutorUtil;
+import com.automation.utils.ToastUtil;
 import com.automation.utils.WebDriverWaitUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Page Object Model for the Event Management page.
- * Handles all event-related operations: create, edit, delete.
+ * Page Object for Event Management (admin). Targets {@code EventModal} field ids in the React app.
  */
 public class EventManagementPage extends BasePage {
     private static final Logger logger = LogManager.getLogger(EventManagementPage.class);
 
-    // Page Elements
+    private static final By DIALOG = By.xpath("//div[@role='dialog']");
+
     @FindBy(xpath = "//button[contains(.,'Create Event')]")
     private WebElement createEventButton;
-
-    // Modal input fields
-    @FindBy(xpath = "//input[@placeholder='e.g., Tech Networking Mixer']")
-    private WebElement titleInput;
-
-    @FindBy(xpath = "//input[@placeholder='What is this event about?']")
-    private WebElement descriptionInput;
-
-    @FindBy(xpath = "//input[@placeholder='e.g., Campus Main Hall, San Francisco']")
-    private WebElement locationInput;
-
-    @FindBy(xpath = "//input[@placeholder='https://example.com/image.jpg']")
-    private WebElement imageUrlInput;
-
-    // Date and Time inputs
-    @FindBy(xpath = "//div[contains(.,'Date')]/input")
-    private WebElement dateInput;
-
-    @FindBy(xpath = "//div[contains(.,'Time')]/input")
-    private WebElement timeInput;
-
-    // Virtual Event toggle
-    @FindBy(xpath = "//button[@role='switch']")
-    private WebElement virtualEventToggle;
-
-    // Category dropdown
-    @FindBy(xpath = "//button[@role='combobox']")
-    private WebElement categoryDropdown;
-
-    // Modal buttons
-    @FindBy(xpath = "//div[@role='dialog']//button[contains(.,'Create Event')]")
-    private WebElement modalCreateButton;
-
-    // Toast notification
-    @FindBy(xpath = "//div[contains(@class,'radix-toast-viewport')]//div[@role='status']")
-    private WebElement toastNotification;
 
     public EventManagementPage() {
         super();
     }
 
-    /**
-     * Navigates to the events management page (admin)
-     */
+    private static String normalizeDateForHtml5(String raw) {
+        String input = raw.trim();
+        if (input.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return input;
+        }
+        try {
+            DateTimeFormatter us = DateTimeFormatter.ofPattern("M/d/yyyy", Locale.US);
+            return LocalDate.parse(input, us).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (Exception e) {
+            return input;
+        }
+    }
+
+    private static String normalizeTimeForHtml5(String raw) {
+        String input = raw.trim();
+        if (input.matches("\\d{1,2}:\\d{2}")) {
+            String[] p = input.split(":");
+            return String.format("%02d:%s", Integer.parseInt(p[0]), p[1]);
+        }
+        try {
+            DateTimeFormatter in = DateTimeFormatter.ofPattern("h:mm a", Locale.US);
+            LocalTime t = LocalTime.parse(input, in);
+            return t.format(DateTimeFormatter.ofPattern("HH:mm"));
+        } catch (Exception e) {
+            return input;
+        }
+    }
+
     public void navigateToEventsPage() {
         logger.info("Navigating to events management page");
         String eventsUrl = ConfigReader.getBaseUrl() + "/admin/events";
         navigateTo(eventsUrl);
-        WebDriverWaitUtil.staticWait(3);
+        WebDriverWaitUtil.waitForPageToLoad();
     }
 
-    /**
-     * Clicks on Create Event button to open the modal
-     */
     public void clickCreateEventButton() {
         logger.info("Clicking Create Event button");
-        WebDriverWaitUtil.staticWait(2);
-        
-        int maxRetries = 3;
-        for (int i = 0; i < maxRetries; i++) {
-            try {
-                WebElement btn = WebDriverWaitUtil.waitForElementClickable(createEventButton);
-                click(btn);
-                WebDriverWaitUtil.staticWait(2);
-                // Wait for modal to open - look for the dialog
-                WebDriverWaitUtil.waitForElementVisible(By.xpath("//div[@role='dialog']"));
-                logger.info("Create Event modal opened");
-                return;
-            } catch (Exception e) {
-                logger.warn("Attempt {} to open Create Event modal failed, retrying...", i + 1);
-                WebDriverWaitUtil.staticWait(2);
-            }
-        }
-        throw new RuntimeException("Failed to open Create Event modal after " + maxRetries + " attempts");
+        WebElement btn = WebDriverWaitUtil.waitForElementClickable(createEventButton);
+        click(btn);
+        WebDriverWaitUtil.waitForElementVisible(DIALOG);
+        WebDriverWaitUtil.waitForElementVisible(By.id("event-title"));
     }
 
-    /**
-     * Enters event title
-     *
-     * @param title Event title
-     */
     public void enterEventTitle(String title) {
         logger.info("Entering event title: {}", title);
-        WebDriverWaitUtil.staticWait(1);
-        // Find all text inputs in the dialog and use the first one for title
-        java.util.List<WebElement> inputs = driver.findElements(By.xpath("//div[@role='dialog']//input[@type='text' or not(@type)]"));
-        if (!inputs.isEmpty()) {
-            WebElement titleInput = inputs.get(0);
-            titleInput.clear();
-            titleInput.sendKeys(title);
-            logger.info("Entered title in first input field");
-        } else {
-            throw new RuntimeException("Could not find title input field");
-        }
+        WebElement el = WebDriverWaitUtil.waitForElementVisible(By.id("event-title"));
+        el.clear();
+        el.sendKeys(title);
     }
 
-    /**
-     * Enters event description
-     *
-     * @param description Event description
-     */
     public void enterEventDescription(String description) {
-        logger.info("Entering event description: {}", description);
-        WebDriverWaitUtil.staticWait(1);
-        // Find all text inputs in the dialog and use the second one for description
-        java.util.List<WebElement> inputs = driver.findElements(By.xpath("//div[@role='dialog']//input[@type='text' or not(@type)]"));
-        if (inputs.size() >= 2) {
-            WebElement descInput = inputs.get(1);
-            descInput.clear();
-            descInput.sendKeys(description);
-            logger.info("Entered description in second input field");
-        } else {
-            logger.warn("Could not find description input field, found {} inputs", inputs.size());
-        }
+        logger.info("Entering event description");
+        WebElement el = WebDriverWaitUtil.waitForElementVisible(By.id("event-description"));
+        el.clear();
+        el.sendKeys(description);
     }
 
-    /**
-     * Enters event date
-     *
-     * @param date Event date (format: MM/DD/YYYY)
-     */
     public void enterEventDate(String date) {
         logger.info("Entering event date: {}", date);
+        String iso = normalizeDateForHtml5(date);
+        List<By> candidates = List.of(
+                By.id("event-date"),
+                By.xpath("//div[@role='dialog']//input[@type='date']"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Date')]/following::input[1]"),
+                By.xpath("//div[@role='dialog']//div[contains(.,'Date')]//input[@type='text' or not(@type)]")
+        );
+        WebElement el = WebDriverWaitUtil.waitForAnyElementVisible(candidates);
+        String inputType = el.getAttribute("type");
+        if (inputType != null && "date".equalsIgnoreCase(inputType)) {
+            JavaScriptExecutorUtil.setAttribute(el, "value", iso);
+            JavaScriptExecutorUtil.executeScript(
+                    "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));"
+                            + "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));", el);
+        } else {
+            el.clear();
+            el.sendKeys(date);
+        }
+    }
+
+    public void enterEventStartTime(String time) {
+        logger.info("Entering event start time: {}", time);
+        List<By> candidates = List.of(
+                By.id("event-start-time"),
+                By.xpath("//div[@role='dialog']//input[@id='event-start-time']"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Start')]/following::input[@type='time'][1]"),
+                By.xpath("//div[@role='dialog']//input[@type='time'][1]")
+        );
+        WebElement el = WebDriverWaitUtil.waitForAnyElementVisible(candidates);
+        el.clear();
+        el.sendKeys(normalizeTimeForHtml5(time));
+    }
+
+    public void enterEventEndTime(String time) {
+        logger.info("Entering event end time: {}", time);
+        String value = normalizeTimeForHtml5(time);
+        List<WebElement> timeInputs = driver.findElements(By.xpath("//div[@role='dialog']//input[@type='time']"));
+        if (timeInputs.size() >= 2) {
+            WebElement el = timeInputs.get(1);
+            WebDriverWaitUtil.waitForElementVisible(el);
+            el.clear();
+            el.sendKeys(value);
+            return;
+        }
+        List<By> candidates = List.of(
+                By.id("event-end-time"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'End')]/following::input[@type='time'][1]")
+        );
         try {
-            // Find date input near the Date label
-            WebElement input = driver.findElement(By.xpath("//div[.//text()[contains(.,'Date')]]//input[@type='text' or not(@type)]"));
-            WebDriverWaitUtil.waitForElementClickable(input);
-            input.clear();
-            input.sendKeys(date);
-            WebDriverWaitUtil.staticWait(1);
+            WebElement el = WebDriverWaitUtil.waitForAnyElementVisible(candidates);
+            el.clear();
+            el.sendKeys(value);
         } catch (Exception e) {
-            logger.warn("Could not enter date: {}", e.getMessage());
+            throw new RuntimeException("End time is required by the event form but no end time field was found", e);
         }
     }
 
     /**
-     * Enters event time
-     *
-     * @param time Event time (format: HH:MM AM/PM)
+     * Backward-compatible: sets start time only (prefer explicit start/end steps in features).
      */
     public void enterEventTime(String time) {
-        logger.info("Entering event time: {}", time);
-        try {
-            // Find time input near the Time label
-            WebElement input = driver.findElement(By.xpath("//div[.//text()[contains(.,'Time')]]//input[@type='text' or not(@type)]"));
-            WebDriverWaitUtil.waitForElementClickable(input);
-            input.clear();
-            input.sendKeys(time);
-            WebDriverWaitUtil.staticWait(1);
-        } catch (Exception e) {
-            logger.warn("Could not enter time: {}", e.getMessage());
-        }
+        enterEventStartTime(time);
     }
 
-    /**
-     * Enters event location
-     *
-     * @param location Event location
-     */
     public void enterEventLocation(String location) {
         logger.info("Entering event location: {}", location);
-        try {
-            WebElement input = WebDriverWaitUtil.waitForElementVisible(By.xpath("//input[@placeholder='e.g., Campus Main Hall, San Francisco']"));
-            input.clear();
-            sendKeys(input, location);
-        } catch (Exception e) {
-            logger.warn("Could not enter location: {}", e.getMessage());
-        }
+        List<By> candidates = List.of(
+                By.id("event-location"),
+                By.xpath("//div[@role='dialog']//input[@id='event-location']"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Location')]/following::input[1]"),
+                By.xpath("//div[@role='dialog']//input[contains(@placeholder,'Campus') or contains(@placeholder,'San Francisco')]")
+        );
+        WebElement el = WebDriverWaitUtil.waitForAnyElementVisible(candidates);
+        el.clear();
+        el.sendKeys(location);
     }
 
-    /**
-     * Toggles virtual event switch
-     */
     public void toggleVirtualEvent() {
         logger.info("Toggling virtual event switch");
-        try {
-            WebElement toggle = WebDriverWaitUtil.waitForElementClickable(By.xpath("//button[@role='switch']"));
-            click(toggle);
-            WebDriverWaitUtil.staticWait(1);
-        } catch (Exception e) {
-            logger.warn("Could not toggle virtual event: {}", e.getMessage());
-        }
+        List<By> candidates = List.of(
+                By.id("virtual-event"),
+                By.xpath("//div[@role='dialog']//*[@role='switch'][1]")
+        );
+        WebElement toggle = WebDriverWaitUtil.waitForElementClickable(
+                WebDriverWaitUtil.waitForAnyElementVisible(candidates));
+        click(toggle);
     }
 
-    /**
-     * Selects event category from dropdown
-     *
-     * @param category Category to select
-     */
-    public void selectCategory(String category) {
-        logger.info("Selecting category: {}", category);
-        try {
-            // Find the category dropdown (combobox)
-            WebElement dropdown = WebDriverWaitUtil.waitForElementClickable(By.xpath("//button[@role='combobox']"));
-            click(dropdown);
-            WebDriverWaitUtil.staticWait(1);
-
-            // Select the option
-            String optionXpath = String.format("//div[@role='option' and contains(.,'%s')]", category);
-            WebElement option = WebDriverWaitUtil.waitForElementClickable(By.xpath(optionXpath));
-            click(option);
-            logger.info("Selected category: {}", category);
-            WebDriverWaitUtil.staticWait(1);
-        } catch (Exception e) {
-            logger.warn("Could not select category: {}", e.getMessage());
-        }
+    public void selectCategory(String categoryLabel) {
+        logger.info("Selecting event type/category: {}", categoryLabel);
+        List<By> triggerCandidates = List.of(
+                By.id("event-type"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Event Type') or contains(.,'Type')]/following::button[1]"),
+                By.xpath("//div[@role='dialog']//button[@role='combobox'][1]")
+        );
+        WebElement trigger = WebDriverWaitUtil.waitForElementClickable(
+                WebDriverWaitUtil.waitForAnyElementVisible(triggerCandidates));
+        click(trigger);
+        String optionXpath = String.format("//div[@role='option' and contains(normalize-space(),\"%s\")]", categoryLabel);
+        WebElement option = WebDriverWaitUtil.waitForElementClickable(By.xpath(optionXpath));
+        click(option);
     }
 
-    /**
-     * Enters event image URL
-     *
-     * @param imageUrl Image URL
-     */
     public void enterImageUrl(String imageUrl) {
-        logger.info("Entering image URL: {}", imageUrl);
+        logger.info("Entering image URL");
         try {
-            WebElement input = WebDriverWaitUtil.waitForElementVisible(By.xpath("//input[@placeholder='https://example.com/image.jpg']"));
-            input.clear();
-            sendKeys(input, imageUrl);
+            WebElement el = WebDriverWaitUtil.waitForElementVisible(By.id("event-image"));
+            el.clear();
+            el.sendKeys(imageUrl);
         } catch (Exception e) {
             logger.warn("Could not enter image URL: {}", e.getMessage());
         }
     }
 
-    /**
-     * Clicks Create Event button in modal
-     */
     public void clickCreateEventButtonInModal() {
-        logger.info("Clicking Create Event button in modal");
-        try {
-            // Wait for button to be enabled
-            WebDriverWaitUtil.staticWait(1);
-            WebElement btn = WebDriverWaitUtil.waitForElementClickable(By.xpath("//div[@role='dialog']//button[contains(.,'Create Event') and not(@disabled)]"));
-            click(btn);
-            WebDriverWaitUtil.staticWait(3);
-            logger.info("Clicked Create Event button");
-        } catch (Exception e) {
-            logger.warn("Could not find modal create button: {}", e.getMessage());
-            // Try alternative
-            try {
-                WebElement btn = driver.findElement(By.xpath("//div[@role='dialog']//button[text()='Create Event']"));
-                click(btn);
-                WebDriverWaitUtil.staticWait(3);
-            } catch (Exception ex) {
-                throw new RuntimeException("Could not click Create Event button in modal", ex);
+        logger.info("Clicking Create Event in modal");
+        List<WebElement> buttons = driver.findElements(
+                By.xpath("//div[@role='dialog']//button[contains(normalize-space(),'Create Event')]"));
+        WebElement submit = null;
+        for (WebElement b : buttons) {
+            if (b.isDisplayed() && b.isEnabled()) {
+                submit = b;
+                break;
             }
         }
-    }
-
-    /**
-     * Clicks delete button for a specific event
-     *
-     * @param eventTitle Event title to delete
-     */
-    public void clickDeleteButtonForEvent(String eventTitle) {
-        logger.info("Clicking delete button for event: {}", eventTitle);
+        if (submit == null) {
+            submit = WebDriverWaitUtil.waitForElementClickable(
+                    By.xpath("//div[@role='dialog']//button[contains(.,'Create Event')]"));
+        }
+        JavaScriptExecutorUtil.scrollToElement(submit);
+        click(submit);
+        int submitWaitSeconds = Math.max(ConfigReader.getExplicitWait(), ConfigReader.getPageLoadTimeout());
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(submitWaitSeconds));
         try {
-            WebDriverWaitUtil.staticWait(2);
-            // Find the event card containing the title and click its Delete button
-            String xpath = String.format("//h3[normalize-space()='%s']/ancestor::div[contains(@class,'rounded')]//button[contains(.,'Delete')]", eventTitle);
-            WebElement deleteButton = WebDriverWaitUtil.waitForElementClickable(By.xpath(xpath));
-            click(deleteButton);
-            WebDriverWaitUtil.staticWait(2);
-            logger.info("Clicked delete button for event: {}", eventTitle);
-        } catch (Exception e) {
-            logger.error("Could not find delete button for event {}: {}", eventTitle, e.getMessage());
-            throw new RuntimeException("Could not find delete button for event: " + eventTitle, e);
+            wait.until(d -> {
+                if (!ToastUtil.getLatestToastText().isEmpty()) {
+                    return true;
+                }
+                if (!collectDialogErrors().isBlank()) {
+                    return true;
+                }
+                // Radix may keep an off-screen dialog node; title field disappearing is a reliable close signal.
+                List<WebElement> titles = d.findElements(By.id("event-title"));
+                if (titles.isEmpty()) {
+                    return true;
+                }
+                return titles.stream().noneMatch(WebElement::isDisplayed);
+            });
+        } catch (TimeoutException e) {
+            throw new RuntimeException(
+                    "Event form still open after submit (timeout " + submitWaitSeconds + "s). Errors: " + collectDialogErrors(),
+                    e);
+        }
+        String errors = collectDialogErrors();
+        if (!errors.isBlank()) {
+            throw new RuntimeException("Event form validation failed: " + errors);
         }
     }
 
-    /**
-     * Confirms deletion in the browser alert
-     */
+    private String collectDialogErrors() {
+        StringBuilder sb = new StringBuilder();
+        for (WebElement e : driver.findElements(By.xpath("//div[@role='dialog']//p[contains(@class,'text-destructive')]"))) {
+            try {
+                String t = e.getText();
+                if (e.isDisplayed() && t != null && t.trim().length() > 1) {
+                    sb.append(t.trim()).append("; ");
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        for (WebElement el : driver.findElements(By.cssSelector("[role='dialog'] input:invalid, [role='dialog'] textarea:invalid"))) {
+            try {
+                String vm = el.getAttribute("validationMessage");
+                if (vm != null && !vm.isBlank()) {
+                    sb.append(vm.trim()).append("; ");
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    public void clickDeleteButtonForEvent(String eventTitle) {
+        logger.info("Clicking delete button for event: {}", eventTitle);
+        // AdminEvents cards use p-6, line-clamp on h3; Delete is a full-width outline button with Trash2 + text "Delete".
+        String esc = eventTitle.replace("\"", "'");
+        List<By> candidates = List.of(
+                By.xpath(String.format(
+                        "//h3[contains(normalize-space(),\"%s\")]/ancestor::div[contains(@class,'p-6')][1]//button[contains(normalize-space(.),'Delete')]",
+                        esc)),
+                By.xpath(String.format(
+                        "//h3[contains(normalize-space(),\"%s\")]/ancestor::div[contains(@class,'p-4') or contains(@class,'p-6')][1]//button[contains(.,'Delete')]",
+                        esc)),
+                By.xpath(String.format(
+                        "//h3[contains(normalize-space(),\"%s\")]/ancestor::div[contains(@class,'border')][1]//button[contains(.,'Delete')]",
+                        esc)),
+                By.xpath(String.format(
+                        "//*[self::h3][contains(normalize-space(),\"%s\")]/following::button[contains(.,'Delete')][1]",
+                        esc))
+        );
+        WebElement deleteButton = WebDriverWaitUtil.waitForAnyElementVisible(candidates, 25);
+        WebDriverWaitUtil.waitForElementClickable(deleteButton);
+        click(deleteButton);
+    }
+
     public void confirmDeletion() {
         logger.info("Confirming deletion");
         try {
-            driver.switchTo().alert().accept();
-            logger.info("Accepted browser alert for deletion");
-            WebDriverWaitUtil.staticWait(2);
+            WebDriverWaitUtil.waitForAlert().accept();
         } catch (Exception e) {
-            logger.debug("No browser alert present, deletion may be immediate: {}", e.getMessage());
+            logger.debug("No browser alert: {}", e.getMessage());
         }
     }
 
-    /**
-     * Gets the success/error message from toast notification
-     *
-     * @return Toast message text
-     */
     public String getToastMessage() {
-        logger.debug("Getting toast message");
-        try {
-            WebDriverWaitUtil.staticWait(2);
-            WebElement toast = WebDriverWaitUtil.waitForElementVisible(toastNotification);
-            if (toast != null) {
-                String title = "";
-                String description = "";
-                try {
-                    WebElement titleElement = toast.findElement(By.xpath(".//div[contains(@class,'title')]"));
-                    title = titleElement.getText();
-                } catch (Exception e) {
-                    logger.debug("Toast title not found");
-                }
-                try {
-                    WebElement descriptionElement = toast.findElement(By.xpath(".//div[contains(@class,'description')]"));
-                    description = descriptionElement.getText();
-                } catch (Exception e) {
-                    logger.debug("Toast description not found");
-                }
-
-                String fullMessage = (title + " " + description).trim();
-                if (!fullMessage.isEmpty()) {
-                    logger.info("Toast message: {}", fullMessage);
-                    return fullMessage;
-                }
-            }
-            return "";
-        } catch (Exception e) {
-            logger.debug("Could not get toast message: {}", e.getMessage());
-            return "";
-        }
+        return ToastUtil.getLatestToastText();
     }
 
-    /**
-     * Checks if toast message contains expected text
-     *
-     * @param expectedText Expected text
-     * @return true if message contains the text
-     */
     public boolean isToastMessageContaining(String expectedText) {
-        String actualMessage = getToastMessage();
-        return actualMessage.toLowerCase().contains(expectedText.toLowerCase());
+        String actual = getToastMessage();
+        return actual.toLowerCase().contains(expectedText.toLowerCase());
     }
 
-    /**
-     * Checks if event exists in the list
-     *
-     * @param eventTitle Event title to check
-     * @return true if event exists
-     */
     public boolean isEventInList(String eventTitle) {
         logger.debug("Checking if event '{}' exists in the list", eventTitle);
-        try {
-            WebDriverWaitUtil.staticWait(2);
-            String escaped = eventTitle.replace("'", "\\'");
-
-            List<By> locators = List.of(
-                    // Exact match
-                    By.xpath(String.format("//h3[normalize-space()='%s']", eventTitle)),
-                    // Title in h tags (new UI may use different tags)
-                    By.xpath(String.format("//*[self::h1 or self::h2 or self::h3 or self::h4][contains(normalize-space(),'%s')]", eventTitle)),
-                    // Card/grid container
-                    By.xpath(String.format("//div[contains(@class,'rounded')]//*[contains(normalize-space(),'%s')]", eventTitle)),
-                    // Fallback: main content
-                    By.xpath(String.format("//*[@role='main']//*[contains(normalize-space(),'%s')]", eventTitle))
-            );
-
-            for (By locator : locators) {
-                List<WebElement> elements = driver.findElements(locator);
-                for (WebElement element : elements) {
-                    if (element != null && element.isDisplayed()) {
+        List<By> locators = List.of(
+                By.xpath(String.format("//h3[contains(normalize-space(),\"%s\")]", eventTitle)),
+                By.xpath(String.format("//*[@role='main']//*[contains(normalize-space(),\"%s\")]", eventTitle))
+        );
+        for (By locator : locators) {
+            List<WebElement> elements = driver.findElements(locator);
+            for (WebElement element : elements) {
+                try {
+                    if (element.isDisplayed()) {
                         return true;
                     }
+                } catch (Exception ignored) {
                 }
             }
-            return false;
-        } catch (Exception e) {
-            logger.error("Error checking if event exists: {}", e.getMessage());
-            return false;
         }
+        return false;
     }
 
-    /**
-     * Checks if event is NOT in the list
-     *
-     * @param eventTitle Event title to check
-     * @return true if event does NOT exist
-     */
     public boolean isEventNotInList(String eventTitle) {
-        logger.debug("Checking if event '{}' is NOT in the list", eventTitle);
-        try {
-            WebDriverWaitUtil.staticWait(2);
-            return !isEventInList(eventTitle);
-        } catch (Exception e) {
-            logger.error("Error checking if event is not in list: {}", e.getMessage());
-            return true;
-        }
+        return !isEventInList(eventTitle);
     }
 
-    /**
-     * Deletes an event if it exists in the list (handles events with timestamp suffix)
-     *
-     * @param eventTitlePrefix Event title prefix to search for
-     * @return true if an event was found and deleted, false otherwise
-     */
     public boolean deleteEventIfExists(String eventTitlePrefix) {
-        logger.info("Checking for events starting with '{}' to delete", eventTitlePrefix);
-        try {
-            WebDriverWaitUtil.staticWait(2);
-            
-            // Find any event title that starts with the given prefix
-            String xpath = String.format("//h3[starts-with(normalize-space(),'%s')]", eventTitlePrefix);
-            List<WebElement> eventElements = driver.findElements(By.xpath(xpath));
-            
-            if (eventElements.isEmpty()) {
-                logger.info("No events found starting with '{}'", eventTitlePrefix);
-                return false;
-            }
-            
-            // Get the full title of the first matching event
-            String fullTitle = eventElements.get(0).getText().trim();
-            logger.info("Found event to delete: '{}'", fullTitle);
-            
-            // Click delete button for this event
-            String deleteXpath = String.format("//h3[normalize-space()='%s']/ancestor::div[contains(@class,'rounded')]//button[contains(.,'Delete')]", fullTitle);
-            WebElement deleteButton = WebDriverWaitUtil.waitForElementClickable(By.xpath(deleteXpath));
-            click(deleteButton);
-            WebDriverWaitUtil.staticWait(1);
-            
-            // Confirm deletion if alert is present
-            try {
-                driver.switchTo().alert().accept();
-                logger.info("Accepted browser alert for deletion");
-            } catch (Exception e) {
-                logger.debug("No browser alert present");
-            }
-            
-            WebDriverWaitUtil.staticWait(2);
-            logger.info("Successfully deleted event: '{}'", fullTitle);
-            return true;
-            
-        } catch (Exception e) {
-            logger.warn("Error while trying to delete event '{}': {}", eventTitlePrefix, e.getMessage());
+        logger.info("Deleting event starting with '{}' if present", eventTitlePrefix);
+        String xpath = String.format("//h3[starts-with(normalize-space(),\"%s\")]", eventTitlePrefix);
+        List<WebElement> found = driver.findElements(By.xpath(xpath));
+        if (found.isEmpty() || !found.get(0).isDisplayed()) {
             return false;
         }
+        String fullTitle = found.get(0).getText().trim();
+        clickDeleteButtonForEvent(fullTitle);
+        confirmDeletion();
+        return true;
     }
 }
-

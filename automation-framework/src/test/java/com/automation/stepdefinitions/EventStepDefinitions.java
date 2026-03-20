@@ -71,6 +71,13 @@ public class EventStepDefinitions {
         getEventManagementPage().enterEventTime(time);
     }
 
+    @And("I enter event end time {string}")
+    public void i_enter_event_end_time(String time) {
+        logger.info("Entering event end time: {}", time);
+        ExtentReportUtil.logInfo("Entering event end time: " + time);
+        getEventManagementPage().enterEventEndTime(time);
+    }
+
     @And("I enter event location {string}")
     public void i_enter_event_location(String location) {
         logger.info("Entering event location: {}", location);

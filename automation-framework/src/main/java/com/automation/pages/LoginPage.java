@@ -7,6 +7,10 @@ import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
+import org.openqa.selenium.support.ui.WebDriverWait;
+
+import java.time.Duration;
+import java.util.List;
 
 /**
  * Login Page Object Model class
@@ -15,15 +19,23 @@ import org.openqa.selenium.support.FindBy;
 public class LoginPage extends BasePage {
     private static final Logger logger = LogManager.getLogger(LoginPage.class);
 
-    // Page Elements using PageFactory
-    @FindBy(id = "email")
-    private WebElement usernameField;
-
     @FindBy(id = "password")
     private WebElement passwordField;
 
     @FindBy(xpath = "//button[@type='submit']")
     private WebElement loginButton;
+
+    private WebElement resolveUsernameField() {
+        List<By> candidates = List.of(
+                By.id("email"),
+                By.id("emailOrUsername"),
+                By.name("email"),
+                By.cssSelector("input[autocomplete='username']"),
+                By.xpath("//form//input[@type='email']"),
+                By.xpath("//form//input[@type='text' or not(@type)][not(@type='password')][1]")
+        );
+        return WebDriverWaitUtil.waitForAnyElementVisible(candidates);
+    }
 
     /**
      * Navigates to login page
@@ -40,7 +52,8 @@ public class LoginPage extends BasePage {
      */
     public void enterUsername(String username) {
         logger.info("Entering username: {}", username);
-        sendKeys(usernameField, username);
+        WebElement field = resolveUsernameField();
+        sendKeys(field, username);
     }
 
     /**
@@ -67,14 +80,12 @@ public class LoginPage extends BasePage {
     public void loginAsSuperAdmin() {
         String username = ConfigReader.getSuperAdminUsername();
         String password = ConfigReader.getSuperAdminPassword();
-        
+
         logger.info("Performing super admin login with username: {}", username);
         enterUsername(username);
         enterPassword(password);
         clickLoginButton();
-        
-        // Wait for page to load after login
-        WebDriverWaitUtil.staticWait(3);
+        waitForLoginNavigation();
     }
 
     /**
@@ -83,14 +94,41 @@ public class LoginPage extends BasePage {
     public void loginAsAdmin() {
         String username = ConfigReader.getAdminUsername();
         String password = ConfigReader.getAdminPassword();
-        
+
         logger.info("Performing admin login with username: {}", username);
         enterUsername(username);
         enterPassword(password);
         clickLoginButton();
-        
-        // Wait for page to load after login
-        WebDriverWaitUtil.staticWait(3);
+        waitForLoginNavigation();
+    }
+
+    /**
+     * Waits until we leave the login route or an error is shown.
+     */
+    private void waitForLoginNavigation() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()));
+        wait.until(d -> !d.getCurrentUrl().contains("/login") || isLoginErrorVisible());
+        if (!driver.getCurrentUrl().contains("/login")) {
+            WebDriverWaitUtil.waitForPageToLoad();
+        }
+    }
+
+    private boolean isLoginErrorVisible() {
+        try {
+            By errorLocator = By.xpath(
+                    "//div[contains(@class,'destructive/10') or contains(@class,'border-destructive')]"
+                            + "//*[contains(@class,'text-destructive')][string-length(normalize-space())>3]");
+            List<WebElement> errors = driver.findElements(errorLocator);
+            return errors.stream().anyMatch(e -> {
+                try {
+                    return e.isDisplayed() && e.getText() != null && !e.getText().isBlank();
+                } catch (Exception ex) {
+                    return false;
+                }
+            });
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -102,7 +140,7 @@ public class LoginPage extends BasePage {
     public boolean isTextDisplayedOnPage(String text) {
         logger.info("Checking if text '{}' is displayed on page", text);
         try {
-            By textLocator = By.xpath("//*[contains(text(),'" + text + "')]");
+            By textLocator = By.xpath("//*[contains(normalize-space(),'" + text + "')]");
             WebElement element = WebDriverWaitUtil.waitForElementVisible(textLocator);
             boolean isDisplayed = element != null && element.isDisplayed();
             logger.info("Text '{}' found: {}", text, isDisplayed);
@@ -121,46 +159,17 @@ public class LoginPage extends BasePage {
     public boolean isLoginSuccessful() {
         logger.info("Checking if login was successful");
         try {
-            // Wait a bit more for login to complete (API call + redirect)
-            int maxRetries = 5;
-            int retryCount = 0;
-            
-            while (retryCount < maxRetries) {
-                WebDriverWaitUtil.staticWait(2);
-                String currentUrl = driver.getCurrentUrl();
-                
-                // Check if we've navigated away from login page
-                boolean urlChanged = !currentUrl.contains("/login");
-                
-                if (urlChanged) {
-                    logger.info("Login success check - URL changed to: {}", currentUrl);
-                    return true;
-                }
-                
-                // Check for any error messages
-                boolean hasError = false;
-                try {
-                    By errorLocator = By.xpath("//*[contains(@class,'error') or contains(@class,'alert-danger') or contains(text(),'Invalid') or contains(text(),'incorrect')]");
-                    java.util.List<WebElement> errors = driver.findElements(errorLocator);
-                    hasError = !errors.isEmpty() && errors.stream().anyMatch(e -> e.isDisplayed());
-                } catch (Exception e) {
-                    // No error found, that's good
-                }
-                
-                if (hasError) {
-                    logger.error("Login failed - error message displayed on page");
-                    return false;
-                }
-                
-                retryCount++;
-                logger.debug("Login check retry {} of {} - still on login page", retryCount, maxRetries);
+            if (isLoginErrorVisible()) {
+                logger.error("Login failed - error message displayed on page");
+                return false;
             }
-            
-            // Final check
-            String currentUrl = driver.getCurrentUrl();
-            boolean urlChanged = !currentUrl.contains("/login");
-            logger.info("Login success check final - URL changed: {}, Current URL: {}", urlChanged, currentUrl);
-            return urlChanged;
+            boolean navigatedAway = WebDriverWaitUtil.waitForUrlToNotContain("/login", ConfigReader.getExplicitWait());
+            if (navigatedAway) {
+                logger.info("Login success check - URL changed to: {}", driver.getCurrentUrl());
+                return true;
+            }
+            logger.warn("Still on login URL after wait");
+            return false;
         } catch (Exception e) {
             logger.error("Error checking login success: {}", e.getMessage());
             return false;

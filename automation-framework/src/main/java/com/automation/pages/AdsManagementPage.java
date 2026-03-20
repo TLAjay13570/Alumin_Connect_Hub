@@ -1,13 +1,19 @@
 package com.automation.pages;
 
 import com.automation.utils.ConfigReader;
+import com.automation.utils.JavaScriptExecutorUtil;
+import com.automation.utils.ToastUtil;
 import com.automation.utils.WebDriverWaitUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.FindBy;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -35,10 +41,6 @@ public class AdsManagementPage extends BasePage {
 
     @FindBy(id = "targetAll")
     private WebElement targetAllCheckbox;
-
-    // Toast notification
-    @FindBy(xpath = "//div[contains(@class,'radix-toast-viewport')]//div[@role='status']")
-    private WebElement toastNotification;
 
     // Modal buttons
     @FindBy(xpath = "//div[@role='dialog']//button[contains(.,'Create Ad')]")
@@ -119,29 +121,46 @@ public class AdsManagementPage extends BasePage {
      */
     public void selectMediaType(String mediaType) {
         logger.info("Selecting media type: {}", mediaType);
+        String mt = mediaType.trim();
         try {
-            // Find the media type select trigger inside the modal.
-            // UI text/labels changed recently, so we match using generic "Media" label first and fall back to the first combobox.
-            WebElement trigger;
-            try {
-                trigger = driver.findElement(By.xpath(
-                        "//div[@role='dialog']//label[contains(.,'Media')]/following::button[@role='combobox'][1]"));
-            } catch (Exception ignored) {
-                trigger = driver.findElement(By.xpath("//div[@role='dialog']//button[@role='combobox'][1]"));
-            }
+            // Radix Select: trigger stays in the dialog; SelectContent is portaled (often under a popover layer).
+            List<By> triggerLocators = List.of(
+                    By.xpath("//div[@role='dialog']//label[contains(.,'Media Type')]/following::button[1]"),
+                    By.xpath("//div[@role='dialog']//label[@for='mediaType']/following::button[1]"),
+                    By.xpath("//div[@role='dialog']//label[contains(.,'Media')]/following::button[@role='combobox'][1]"),
+                    By.xpath("//div[@role='dialog']//button[@role='combobox'][1]")
+            );
+            WebElement trigger = WebDriverWaitUtil.waitForAnyElementVisible(triggerLocators, 25);
             WebDriverWaitUtil.waitForElementClickable(trigger);
             click(trigger);
-            WebDriverWaitUtil.staticWait(1);
 
-            // Select the option - handle both div-based and aria-based option rendering
+            boolean picked = false;
             List<By> optionLocators = List.of(
-                    By.xpath("//div[@role='dialog']//div[@role='listbox']//div[@role='option' and contains(.,'" + mediaType + "')]"),
-                    By.xpath("//div[@role='option' and contains(.,'" + mediaType + "')]")
+                    By.xpath("//div[contains(@class,'popover')]//*[normalize-space()=\"" + mt + "\"]"),
+                    By.xpath("//*[@role='listbox']//*[@role='option' and contains(normalize-space(),\"" + mt + "\")]"),
+                    By.xpath("//*[@role='option' and contains(normalize-space(),\"" + mt + "\")]"),
+                    By.xpath("//div[contains(@class,'SelectItem') or contains(@class,'select-item')][contains(.,\"" + mt + "\")]")
             );
-            WebElement option = WebDriverWaitUtil.waitForAnyElementVisible(optionLocators);
-            click(option);
+            try {
+                WebElement option = WebDriverWaitUtil.waitForAnyElementVisible(optionLocators, 12);
+                JavaScriptExecutorUtil.scrollToElement(option);
+                WebDriverWaitUtil.waitForElementClickable(option);
+                click(option);
+                picked = true;
+            } catch (Exception ex) {
+                logger.debug("Clicking portaled option failed, trying keyboard: {}", ex.getMessage());
+            }
+            if (!picked) {
+                WebDriverWaitUtil.waitForElementClickable(trigger);
+                click(trigger);
+                Actions actions = new Actions(driver);
+                int arrowDowns = mt.equalsIgnoreCase("Video") ? 2 : 1;
+                for (int i = 0; i < arrowDowns; i++) {
+                    actions.pause(Duration.ofMillis(120)).sendKeys(Keys.ARROW_DOWN).perform();
+                }
+                actions.sendKeys(Keys.ENTER).perform();
+            }
             logger.info("Selected media type: {}", mediaType);
-            WebDriverWaitUtil.staticWait(1);
         } catch (Exception e) {
             logger.warn("Could not select media type using dropdown, may already be selected: {}", e.getMessage());
         }
@@ -154,19 +173,95 @@ public class AdsManagementPage extends BasePage {
      */
     public void enterMediaUrl(String mediaUrl) {
         logger.info("Entering media URL: {}", mediaUrl);
-        // Field id/label changed; locate the input by multiple heuristics inside the modal.
+        // Do not send Escape here — Radix/shadcn Dialog treats Escape as close and the modal will disappear.
         List<By> candidates = List.of(
+                By.cssSelector("[role='dialog'] #mediaUrl"),
+                By.xpath("//div[@role='dialog']//label[contains(.,'Image URL') or contains(.,'Video URL')]/following::input[1]"),
                 By.id("mediaUrl"),
                 By.id("mediaURL"),
                 By.id("media_url"),
-                By.xpath("//div[@role='dialog']//label[contains(.,'Media')]/following::input[1]"),
-                By.xpath("//div[@role='dialog']//input[contains(@placeholder,'Media') or contains(@placeholder,'media') or contains(@placeholder,'URL') or contains(@aria-label,'Media')][1]"),
-                By.xpath("//div[@role='dialog']//input[@type='url' or contains(@type,'url')][1]"),
+                By.id("imageUrl"),
+                By.xpath("//div[@role='dialog']//input[contains(@placeholder,'.jpg') or contains(@placeholder,'.mp4') or contains(@placeholder,'image.jpg') or contains(@placeholder,'video.mp4')][1]"),
                 By.xpath("//div[@role='dialog']//input[contains(@id,'media') or contains(@name,'media')][1]")
         );
-        WebElement input = WebDriverWaitUtil.waitForAnyElementVisible(candidates);
-        input.clear();
-        sendKeys(input, mediaUrl);
+        WebElement input;
+        try {
+            input = WebDriverWaitUtil.waitForAnyElementVisible(candidates, 20);
+        } catch (Exception primary) {
+            logger.debug("Primary media URL locators failed, using dialog field order heuristic: {}", primary.getMessage());
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+            input = wait.until(d -> findMediaUrlInputInOpenDialog());
+        }
+        JavaScriptExecutorUtil.scrollToElement(input);
+        try {
+            WebDriverWaitUtil.waitForElementClickable(input);
+            input.clear();
+            sendKeys(input, mediaUrl);
+        } catch (Exception e) {
+            logger.debug("Direct input failed; using JS set on mediaUrl: {}", e.getMessage());
+            JavaScriptExecutorUtil.executeScript(
+                    "arguments[0].removeAttribute('readonly');"
+                            + "arguments[0].value=arguments[1];"
+                            + "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));"
+                            + "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));",
+                    input, mediaUrl);
+        }
+    }
+
+    /**
+     * When ids differ per environment, pick the first dialog text/url input that is not title, description, or link URL.
+     */
+    private WebElement findMediaUrlInputInOpenDialog() {
+        List<WebElement> inputs = driver.findElements(By.xpath(
+                "//div[@role='dialog']//input[not(@type='hidden') and not(@type='checkbox') "
+                        + "and not(@type='file') and not(@type='radio')]"));
+        for (WebElement el : inputs) {
+            try {
+                if (!el.isDisplayed()) {
+                    continue;
+                }
+                String id = nullToEmpty(el.getAttribute("id")).toLowerCase();
+                if (id.equals("title") || id.equals("description")) {
+                    continue;
+                }
+                if (id.contains("link") && id.contains("url")) {
+                    continue;
+                }
+                String ph = nullToEmpty(el.getAttribute("placeholder")).toLowerCase();
+                if (ph.contains("learn more") || ph.contains("/offer")) {
+                    continue;
+                }
+                if (id.contains("media") || id.contains("image") || ph.contains("image") || ph.contains("video") || ph.contains(".jpg") || ph.contains(".mp4")) {
+                    return el;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        for (WebElement el : inputs) {
+            try {
+                if (!el.isDisplayed()) {
+                    continue;
+                }
+                String id = nullToEmpty(el.getAttribute("id")).toLowerCase();
+                if (id.equals("title") || id.equals("description")) {
+                    continue;
+                }
+                if (id.contains("link") && id.contains("url")) {
+                    continue;
+                }
+                String ph = nullToEmpty(el.getAttribute("placeholder")).toLowerCase();
+                if (ph.contains("learn more")) {
+                    continue;
+                }
+                return el;
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
     }
 
     /**
@@ -197,7 +292,8 @@ public class AdsManagementPage extends BasePage {
         logger.info("Selecting ad placement: {}", placement);
         try {
             // Find the placement select trigger - the parent div contains both label and button
-            WebElement trigger = driver.findElement(By.xpath("//label[contains(text(),'Ad Placement')]/..//button[@role='combobox']"));
+            WebElement trigger = driver.findElement(By.xpath(
+                    "//div[@role='dialog']//label[contains(.,'Ad Placement')]/following::button[@role='combobox'][1]"));
             WebDriverWaitUtil.waitForElementClickable(trigger);
             click(trigger);
             WebDriverWaitUtil.staticWait(1);
@@ -214,7 +310,12 @@ public class AdsManagementPage extends BasePage {
                 optionXpath = String.format("//div[@role='option' and contains(.,'%s')]", placement);
             }
             
-            WebElement option = WebDriverWaitUtil.waitForElementClickable(By.xpath(optionXpath));
+            List<By> placementOptions = List.of(
+                    By.xpath(optionXpath),
+                    By.xpath("//*[@role='listbox']//*[@role='option' and contains(normalize-space(),\"" + placement + "\")]")
+            );
+            WebElement option = WebDriverWaitUtil.waitForAnyElementVisible(placementOptions, 20);
+            WebDriverWaitUtil.waitForElementClickable(option);
             click(option);
             logger.info("Selected ad placement: {}", placement);
             WebDriverWaitUtil.staticWait(1);
@@ -429,36 +530,11 @@ public class AdsManagementPage extends BasePage {
      */
     public String getToastMessage() {
         logger.debug("Getting toast message");
-        try {
-            WebDriverWaitUtil.staticWait(2);
-            WebElement toast = WebDriverWaitUtil.waitForElementVisible(toastNotification);
-            if (toast != null) {
-                String title = "";
-                String description = "";
-                try {
-                    WebElement titleElement = toast.findElement(By.xpath(".//div[contains(@class,'title')]"));
-                    title = titleElement.getText();
-                } catch (Exception e) {
-                    logger.debug("Toast title not found");
-                }
-                try {
-                    WebElement descriptionElement = toast.findElement(By.xpath(".//div[contains(@class,'description')]"));
-                    description = descriptionElement.getText();
-                } catch (Exception e) {
-                    logger.debug("Toast description not found");
-                }
-
-                String fullMessage = (title + " " + description).trim();
-                if (!fullMessage.isEmpty()) {
-                    logger.info("Toast message: {}", fullMessage);
-                    return fullMessage;
-                }
-            }
-            return "";
-        } catch (Exception e) {
-            logger.debug("Could not get toast message: {}", e.getMessage());
-            return "";
+        String fullMessage = ToastUtil.getLatestToastText();
+        if (!fullMessage.isEmpty()) {
+            logger.info("Toast message: {}", fullMessage);
         }
+        return fullMessage;
     }
 
     /**
