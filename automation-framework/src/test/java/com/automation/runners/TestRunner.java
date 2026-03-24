@@ -19,7 +19,8 @@ import io.cucumber.testng.CucumberOptions;
         monochrome = true,
         dryRun = false,
         // Exclude @requires-user-api unless you run with a filter that includes it (user CRUD needs backend API).
-        tags = "@Smoke and @Positive and not @requires-user-api"
+        // Exclude @RequiresExtendedEventModal when deploy omits optional modal fields (image URL, registration deadline).
+        tags = "@Smoke and @Positive and not @requires-user-api and not @RequiresExtendedEventModal"
 )
 public class TestRunner extends AbstractTestNGCucumberTests {
 

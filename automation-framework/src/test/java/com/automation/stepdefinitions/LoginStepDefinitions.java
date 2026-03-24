@@ -37,13 +37,28 @@ public class LoginStepDefinitions {
         
         if (userType.equalsIgnoreCase("super admin") || userType.equalsIgnoreCase("superadmin")) {
             getLoginPage().loginAsSuperAdmin();
-        } else if (userType.equalsIgnoreCase("admin")) {
-            // Login with admin credentials from config
+        } else if (userType.equalsIgnoreCase("admin")
+                || userType.equalsIgnoreCase("mit admin")
+                || userType.equalsIgnoreCase("MIT admin")
+                || userType.equalsIgnoreCase("university admin")) {
             getLoginPage().loginAsAdmin();
+        } else if (userType.equalsIgnoreCase("alumni")
+                || userType.equalsIgnoreCase("university alumni")
+                || userType.equalsIgnoreCase("mit alumni")
+                || userType.equalsIgnoreCase("MIT alumni")
+                || userType.equalsIgnoreCase("mit alumin")) {
+            getLoginPage().loginAsAlumni();
         } else {
             logger.warn("Unknown user type: {}, attempting super admin login", userType);
             getLoginPage().loginAsSuperAdmin();
         }
+    }
+
+    @When("I logout and clear session")
+    public void i_logout_and_clear_session() {
+        logger.info("Logout: clear session cookies");
+        ExtentReportUtil.logInfo("Logout: clear session cookies");
+        getLoginPage().logoutClearSession();
     }
 
     @Then("I should be logged in successfully")

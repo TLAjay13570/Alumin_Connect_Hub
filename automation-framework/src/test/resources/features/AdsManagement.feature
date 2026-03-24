@@ -11,19 +11,27 @@ Feature: Ads Management
     And I navigate to the ads management page
 
   @Smoke @Positive @CreateAd
-  Scenario: Create an image ad for all universities
+  Scenario Outline: Create an image ad for all universities
     When I click on the Create Ad button
-    And I enter ad title "Test Image Ad"
-    And I enter ad description "This is a test advertisement for automation"
-    And I select media type "Image"
-    And I enter media URL "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800"
-    And I enter link URL "https://example.com/promo"
+    And I enter ad title "<adTitle>"
+    And I enter ad description "<adDescription>"
+    And I select media type "<mediaType>"
+    And I enter media URL "<mediaUrl>"
+    And I enter link URL "<linkUrl>"
     And I check "Show to all universities" checkbox
     And I click on "Create Ad" button in modal
     Then I should see success message containing "Ad created" or "created"
-    And I should see ad "Test Image Ad" in the ads list
+    And I should see ad "<adTitle>" in the ads list
+
+    Examples:
+      | adTitle      | adDescription                          | mediaType | mediaUrl                                                                      | linkUrl                    |
+      | Test Image Ad | This is a test advertisement for automation | Image     | https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800 | https://example.com/promo |
 
   @Smoke @Positive @DeleteAd @Cleanup
-  Scenario: Delete the created ad
-    When I delete ad "Test Image Ad" if it exists
+  Scenario Outline: Delete the created ad
+    When I delete ad "<adTitlePrefix>" if it exists
     Then all test ads should be cleaned up
+
+    Examples:
+      | adTitlePrefix |
+      | Test Image Ad |

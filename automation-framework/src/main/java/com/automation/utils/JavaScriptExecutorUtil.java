@@ -153,6 +153,22 @@ public class JavaScriptExecutorUtil {
     }
 
     /**
+     * Sets value on a controlled React input/textarea so {@code onChange} runs (native {@code .value =} is ignored).
+     */
+    public static void setReactInputValue(WebElement element, String value) {
+        logger.debug("Setting React-controlled input value via prototype setter");
+        getJsExecutor().executeScript(
+                "var el = arguments[0]; var val = arguments[1];"
+                        + "var proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;"
+                        + "var desc = Object.getOwnPropertyDescriptor(proto, 'value');"
+                        + "if (desc && desc.set) { desc.set.call(el, val); } else { el.value = val; }"
+                        + "el.dispatchEvent(new Event('input', { bubbles: true }));"
+                        + "el.dispatchEvent(new Event('change', { bubbles: true }));",
+                element,
+                value);
+    }
+
+    /**
      * Gets attribute value using JavaScript
      *
      * @param element   WebElement

@@ -5,7 +5,12 @@ Feature: Login Functionality
   So that I can access the dashboard
 
   @Smoke @Positive
-  Scenario: Super Admin successful login
+  Scenario Outline: Successful login by role
     Given I navigate to the login page
-    When I login as "super admin" using credentials from config
+    When I login as "<role>" using credentials from config
     Then I should be logged in successfully
+
+    Examples:
+      | role        |
+      | super admin |
+      | admin       |

@@ -103,6 +103,31 @@ public class LoginPage extends BasePage {
     }
 
     /**
+     * Performs login as a university alumni user using config credentials.
+     */
+    public void loginAsAlumni() {
+        String username = ConfigReader.getAlumniUsername();
+        String password = ConfigReader.getAlumniPassword();
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            throw new IllegalStateException("alumni.username and alumni.password must be set in config.properties");
+        }
+        logger.info("Performing alumni login with username: {}", username);
+        enterUsername(username);
+        enterPassword(password);
+        clickLoginButton();
+        waitForLoginNavigation();
+    }
+
+    /**
+     * Clears session cookies and opens the login page (switch users in the same browser).
+     */
+    public void logoutClearSession() {
+        logger.info("Clearing cookies and navigating to login");
+        driver.manage().deleteAllCookies();
+        navigateToLoginPage();
+    }
+
+    /**
      * Waits until we leave the login route or an error is shown.
      */
     private void waitForLoginNavigation() {

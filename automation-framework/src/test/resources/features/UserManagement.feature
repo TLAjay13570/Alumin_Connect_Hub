@@ -15,60 +15,68 @@ Feature: User Management
   # ============================================
 
   @Smoke @Positive @CreateUser @AdminUser
-  Scenario: Create a University Admin user
+  Scenario Outline: Create a University Admin user
     When I click on "Add User" button
-    And I select role "University Administrator"
-    And I enter user name "Test Admin User"
-    And I enter user email "test.admin@university.edu"
-    And I enter user password "password123"
-    And I select university "Massachusetts Institute of Technology"
+    And I select role "<role>"
+    And I enter user name "<userName>"
+    And I enter user email "<userEmail>"
+    And I enter user password "<password>"
+    And I select university "<university>"
     And I click on "Create User" button
     Then I should see success message containing "created" or "added"
-    And I should see user "Test Admin User" in the users list
-    # Cleanup - delete the created user
-    When I click on delete button for user "Test Admin User"
+    And I should see user "<userName>" in the users list
+    When I click on delete button for user "<userName>"
     And I confirm the deletion
     Then I should see success message containing "deleted" or "removed"
-    And I should not see user "Test Admin User" in the users list
+    And I should not see user "<userName>" in the users list
+
+    Examples:
+      | role                     | userName        | userEmail               | password   | university                          |
+      | University Administrator | Test Admin User | test.admin@university.edu | password123 | Massachusetts Institute of Technology |
 
   @Smoke @Positive @CreateUser @AlumniUser
-  Scenario: Create an Alumni user
+  Scenario Outline: Create an Alumni user
     When I click on "Add User" button
-    And I select role "Alumni"
-    And I enter user name "Test Alumni User"
-    And I enter user email "test.alumni@alumni.edu"
-    And I enter user password "password123"
-    And I select university "Stanford University"
-    And I enter graduation year "2023"
-    And I enter major "Computer Science"
+    And I select role "<role>"
+    And I enter user name "<userName>"
+    And I enter user email "<userEmail>"
+    And I enter user password "<password>"
+    And I select university "<university>"
+    And I enter graduation year "<graduationYear>"
+    And I enter major "<major>"
     And I click on "Create User" button
     Then I should see success message containing "created" or "added"
-    And I should see user "Test Alumni User" in the users list
-    # Cleanup - delete the created user
-    When I click on delete button for user "Test Alumni User"
+    And I should see user "<userName>" in the users list
+    When I click on delete button for user "<userName>"
     And I confirm the deletion
     Then I should see success message containing "deleted" or "removed"
-    And I should not see user "Test Alumni User" in the users list
+    And I should not see user "<userName>" in the users list
+
+    Examples:
+      | role   | userName         | userEmail            | password   | university         | graduationYear | major            |
+      | Alumni | Test Alumni User | test.alumni@alumni.edu | password123 | Stanford University | 2023           | Computer Science |
 
   # ============================================
   # DELETE USER SCENARIOS
   # ============================================
 
   @Smoke @Positive @DeleteUser
-  Scenario: Delete a user
-    # Create a user to delete
+  Scenario Outline: Delete a user
     When I click on "Add User" button
-    And I select role "Alumni"
-    And I enter user name "Delete Test User"
-    And I enter user email "delete.test@alumni.edu"
-    And I enter user password "password123"
-    And I select university "Massachusetts Institute of Technology"
-    And I enter graduation year "2022"
-    And I enter major "Business"
+    And I select role "<role>"
+    And I enter user name "<userName>"
+    And I enter user email "<userEmail>"
+    And I enter user password "<password>"
+    And I select university "<university>"
+    And I enter graduation year "<graduationYear>"
+    And I enter major "<major>"
     And I click on "Create User" button
     Then I should see success message containing "created" or "added"
-    # Now delete the user (this is the main test)
-    When I click on delete button for user "Delete Test User"
+    When I click on delete button for user "<userName>"
     And I confirm the deletion
     Then I should see success message containing "deleted" or "removed"
-    And I should not see user "Delete Test User" in the users list
+    And I should not see user "<userName>" in the users list
+
+    Examples:
+      | role   | userName         | userEmail              | password   | university                          | graduationYear | major   |
+      | Alumni | Delete Test User | delete.test@alumni.edu | password123 | Massachusetts Institute of Technology | 2022           | Business |

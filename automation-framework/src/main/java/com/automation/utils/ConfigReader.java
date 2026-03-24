@@ -144,12 +144,26 @@ public class ConfigReader {
     }
 
     /**
+     * Alumni username (university member, not admin).
+     */
+    public static String getAlumniUsername() {
+        return getProperty("alumni.username");
+    }
+
+    /**
+     * Alumni password.
+     */
+    public static String getAlumniPassword() {
+        return getProperty("alumni.password");
+    }
+
+    /**
      * Gets implicit wait time from config
      *
      * @return Implicit wait time in seconds
      */
     public static int getImplicitWait() {
-        return Integer.parseInt(getProperty("implicit.wait", "10"));
+        return Integer.parseInt(getProperty("implicit.wait", "0"));
     }
 
     /**
@@ -158,7 +172,7 @@ public class ConfigReader {
      * @return Explicit wait time in seconds
      */
     public static int getExplicitWait() {
-        return Integer.parseInt(getProperty("explicit.wait", "20"));
+        return Integer.parseInt(getProperty("explicit.wait", "15"));
     }
 
     /**
