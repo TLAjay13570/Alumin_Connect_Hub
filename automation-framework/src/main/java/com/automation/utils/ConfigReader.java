@@ -89,6 +89,24 @@ public class ConfigReader {
         return getProperty("login.url");
     }
 
+    /** Admin fundraiser management page ({@code /admin/fundraiser}). */
+    public static String getAdminFundraiserUrl() {
+        String u = getProperty("admin.fundraiser.url");
+        if (u != null && !u.isBlank()) {
+            return u;
+        }
+        String base = getBaseUrl();
+        if (base == null || base.isBlank()) {
+            throw new IllegalStateException("base.url must be set in config.properties");
+        }
+        return base.endsWith("/") ? base + "admin/fundraiser" : base + "/admin/fundraiser";
+    }
+
+    /** REST API origin (no trailing slash), for optional API validation. */
+    public static String getApiBaseUrl() {
+        return getProperty("api.base.url", "");
+    }
+
     /**
      * Gets username from config
      *
