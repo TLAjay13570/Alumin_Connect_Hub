@@ -5,6 +5,7 @@ import com.automation.utils.WebDriverWaitUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -119,10 +120,17 @@ public class LoginPage extends BasePage {
     }
 
     /**
-     * Clears session cookies and opens the login page (switch users in the same browser).
+     * Clears session cookies, localStorage, and sessionStorage, then opens the login page.
+     * The app stores JWT tokens in localStorage — clearing cookies alone is not enough.
      */
     public void logoutClearSession() {
-        logger.info("Clearing cookies and navigating to login");
+        logger.info("Clearing cookies, localStorage, and sessionStorage");
+        try {
+            ((JavascriptExecutor) driver).executeScript(
+                    "window.localStorage.clear(); window.sessionStorage.clear();");
+        } catch (Exception e) {
+            logger.warn("Could not clear storage (page may not be loaded yet): {}", e.getMessage());
+        }
         driver.manage().deleteAllCookies();
         navigateToLoginPage();
     }
