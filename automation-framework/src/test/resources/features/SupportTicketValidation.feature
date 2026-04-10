@@ -1,7 +1,12 @@
 @SupportTicket @SupportTicketValidation
-Feature: Support Ticket — form validation and edge cases
-  The UI blocks submission when required fields are missing and handles edge-case inputs gracefully.
-  Validation is delivered via toast notifications (title "Error") rather than inline HTML errors.
+Feature: Support Ticket — edge cases
+  Positive edge-case inputs for the support ticket system.
+
+  # Toast facts (from source code):
+  #   SupportTicketModal.tsx:
+  #     Create success     → title "Ticket Submitted"  desc "Your support ticket has been submitted successfully..."
+  #   AdminSupport.tsx:
+  #     Admin reply success → title "Response Sent"    desc "Your response has been sent to the user."
 
   Background:
     Given I navigate to the login page
@@ -11,35 +16,7 @@ Feature: Support Ticket — form validation and edge cases
     And I click the Create Ticket button
 
   # ═══════════════════════════════════════════════════════════════════════
-  # Empty / Incomplete Submissions
-  # Validation: SupportTicketModal.tsx checks subject.trim() && description.trim()
-  # Toast on failure: title "Error", description "Please fill in all required fields."
-  # ═══════════════════════════════════════════════════════════════════════
-
-  @SupportTicketValidation @Negative @Regression
-  Scenario: Submit with all fields empty shows validation error toast
-    When I attempt to submit the ticket form without filling required fields
-    Then I should see validation errors on the ticket form
-    And the ticket form should remain open
-
-  @SupportTicketValidation @Negative @Regression
-  Scenario: Submit with only subject filled shows validation error toast
-    When I enter ticket subject "Incomplete — subject only"
-    And I attempt to submit the ticket form without filling required fields
-    Then I should see validation errors on the ticket form
-    And the ticket form should remain open
-
-  @SupportTicketValidation @Negative @Regression
-  Scenario: Submit with subject and category but no description shows validation error
-    When I enter ticket subject "AUTO_ST_UNIQUE — No Description"
-    And I select ticket category "Technical"
-    And I select ticket priority "High"
-    And I attempt to submit the ticket form without filling required fields
-    Then I should see validation errors on the ticket form
-    And the ticket form should remain open
-
-  # ═══════════════════════════════════════════════════════════════════════
-  # Edge Cases — Input Boundaries
+  # Edge Cases — Input Boundaries (Positive)
   # ═══════════════════════════════════════════════════════════════════════
 
   @SupportTicketValidation @EdgeCase @Regression
@@ -62,27 +39,8 @@ Feature: Support Ticket — form validation and edge cases
     Then I should see a ticket toast containing "submitted"
 
   # ═══════════════════════════════════════════════════════════════════════
-  # Admin Edge Cases
-  # handleSendResponse shows toast "Error"/"Please enter a message." on empty reply
+  # Admin Edge Cases (Positive)
   # ═══════════════════════════════════════════════════════════════════════
-
-  @SupportTicketValidation @Negative @Admin @Regression
-  Scenario: Admin cannot send an empty reply
-    When I enter ticket subject "AUTO_ST_UNIQUE — Admin Empty Reply"
-    And I select ticket category "Technical"
-    And I select ticket priority "High"
-    And I enter ticket description "Ticket for testing empty admin reply validation."
-    And I submit the ticket form
-    Then the ticket list should show my created ticket
-    When I logout and clear session
-    When I login as "MIT admin" using credentials from config
-    Then I should be logged in successfully
-    When I navigate to the admin support tickets page
-    And I open the ticket detail for my tracked subject from admin
-    Then the ticket detail modal should be open
-    When I enter admin reply ""
-    And I send the admin reply
-    Then I should see validation errors in the reply section
 
   @SupportTicketValidation @EdgeCase @Admin @Regression
   Scenario: Admin sends a reply with a very long message

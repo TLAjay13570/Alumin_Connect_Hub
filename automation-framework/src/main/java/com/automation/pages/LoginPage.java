@@ -132,6 +132,8 @@ public class LoginPage extends BasePage {
             logger.warn("Could not clear storage (page may not be loaded yet): {}", e.getMessage());
         }
         driver.manage().deleteAllCookies();
+        // Navigate to a blank page first to ensure old SPA state is fully destroyed
+        driver.get("about:blank");
         navigateToLoginPage();
     }
 
@@ -148,10 +150,17 @@ public class LoginPage extends BasePage {
 
     private boolean isLoginErrorVisible() {
         try {
-            By errorLocator = By.xpath(
-                    "//div[contains(@class,'destructive/10') or contains(@class,'border-destructive')]"
+            // Inline error: <div class="bg-destructive/10 ..."><p class="text-destructive">...</p></div>
+            By inlineError = By.xpath(
+                    "//div[contains(@class,'destructive')]"
                             + "//*[contains(@class,'text-destructive')][string-length(normalize-space())>3]");
-            List<WebElement> errors = driver.findElements(errorLocator);
+            // Toast error: Login.tsx also calls toast({ title: 'Login failed', ... })
+            By toastError = By.xpath(
+                    "//*[@role='status' or @role='alert']"
+                            + "[contains(normalize-space(.),'failed') or contains(normalize-space(.),'error')"
+                            + " or contains(normalize-space(.),'Invalid')]");
+            List<WebElement> errors = driver.findElements(inlineError);
+            errors.addAll(driver.findElements(toastError));
             return errors.stream().anyMatch(e -> {
                 try {
                     return e.isDisplayed() && e.getText() != null && !e.getText().isBlank();

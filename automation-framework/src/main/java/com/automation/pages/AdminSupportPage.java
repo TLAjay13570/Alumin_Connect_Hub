@@ -83,9 +83,9 @@ public class AdminSupportPage extends BasePage {
     private static final By STATUS_SELECT_TRIGGER = By.xpath(
             "//button[@role='combobox'][@id='status']");
 
-    // <Button onClick={handleUpdateStatus}>Update Ticket</Button>
+    // Button text may be "Update Ticket" or "Update Status" depending on deployed version
     private static final By BTN_UPDATE_TICKET = By.xpath(
-            "//button[contains(normalize-space(.),'Update Ticket')]");
+            "//button[contains(normalize-space(.),'Update Ticket') or contains(normalize-space(.),'Update Status')]");
 
     // ── Reply validation (toast based) ────────────────────────────────────────
     // handleSendResponse shows toast: title "Error", description "Please enter a message."
@@ -354,18 +354,30 @@ public class AdminSupportPage extends BasePage {
      * <p>{@code handleSendResponse} shows: title "Error", description "Please enter a message."
      */
     public boolean isReplyValidationErrorDisplayed() {
-        WebDriverWaitUtil.staticWait(1); // Brief wait for toast to appear
-        return driver.findElements(TOAST_SIGNALS).stream()
-                .anyMatch(el -> {
+        // Try ToastUtil first (covers both Radix and Sonner toast implementations)
+        try {
+            return new WebDriverWait(driver, Duration.ofSeconds(5)).until(d -> {
+                String text = com.automation.utils.ToastUtil.getLatestToastText().toLowerCase();
+                if (text.contains("error") || text.contains("message")
+                        || text.contains("enter") || text.contains("please")) {
+                    return Boolean.TRUE;
+                }
+                // Also check DOM directly
+                List<WebElement> toasts = d.findElements(TOAST_SIGNALS);
+                return toasts.stream().anyMatch(el -> {
                     try {
                         if (!el.isDisplayed()) return false;
-                        String text = el.getText().toLowerCase();
-                        return text.contains("error") || text.contains("message")
-                                || text.contains("enter") || text.contains("please");
-                    } catch (Exception e) {
+                        String t = el.getText().toLowerCase();
+                        return t.contains("error") || t.contains("message")
+                                || t.contains("enter") || t.contains("please");
+                    } catch (Exception ex) {
                         return false;
                     }
-                });
+                }) ? Boolean.TRUE : null;
+            });
+        } catch (TimeoutException e) {
+            return false;
+        }
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -381,32 +393,106 @@ public class AdminSupportPage extends BasePage {
      * {@code handleUpdateStatus()} calls {@code setSelectedTicket(null)}.
      */
     public void changeTicketStatus(String status) {
-        WebElement trigger = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()))
-                .until(ExpectedConditions.elementToBeClickable(STATUS_SELECT_TRIGGER));
-        jsScrollIntoView(trigger);
-        actionsClick(trigger); // Radix SelectTrigger opens on onPointerDown — Actions fires the full event chain
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()));
 
-        By optionLocator = By.xpath(
-                "//*[@role='option'][contains(normalize-space(.)," + xpathLiteral(status) + ")]");
-        WebElement option = new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(ExpectedConditions.elementToBeClickable(optionLocator));
-        actionsClick(option);
-        logger.debug("Status changed to: {}", status);
+        try {
+            // Step 1: Wait & scroll to trigger
+            WebElement trigger = wait.until(ExpectedConditions.elementToBeClickable(STATUS_SELECT_TRIGGER));
+            jsScrollIntoView(trigger);
+
+            // Step 2: Open dropdown using JS pointer events (Radix fix)
+            openRadixDropdown(trigger);
+
+            // Step 3: Wait for dropdown portal
+            By listboxLocator = By.xpath("(//*[@role='listbox'])[last()]");
+            wait.until(ExpectedConditions.visibilityOfElementLocated(listboxLocator));
+
+            // Step 4: Locate option
+            By optionLocator = By.xpath(
+                    "(//*[@role='option' and contains(normalize-space(.)," + xpathLiteral(status) + ")])[last()]");
+            WebElement option = wait.until(ExpectedConditions.presenceOfElementLocated(optionLocator));
+
+            // Step 5: Scroll option into view
+            jsScrollIntoView(option);
+
+            // Step 6: Select option using click event ONLY (no pointerdown).
+            // Radix SelectItem selects on onClick → option is chosen + listbox closes.
+            // Dialog's onPointerDownOutside does NOT fire (no pointerdown dispatched)
+            // → the Dialog stays open so we can still click "Update Status".
+            ((JavascriptExecutor) driver).executeScript(
+                    "arguments[0].dispatchEvent("
+                            + "new MouseEvent('click', {bubbles:true, cancelable:true, composed:true}));",
+                    option);
+
+            // Step 7: Wait for dropdown to close (Radix closes the listbox on selection)
+            try {
+                new WebDriverWait(driver, Duration.ofSeconds(5))
+                        .until(ExpectedConditions.invisibilityOfElementLocated(listboxLocator));
+            } catch (TimeoutException e) {
+                // If listbox is still open, dismiss with Escape and proceed
+                driver.findElement(By.tagName("body")).sendKeys(Keys.ESCAPE);
+            }
+
+            logger.debug("Status changed to: {}", status);
+        } catch (Exception e) {
+            logger.error("Failed to change status to: {}", status);
+            throw new RuntimeException("Radix dropdown selection failed for status: " + status, e);
+        }
+    }
+
+    private void openRadixDropdown(WebElement element) {
+        ((JavascriptExecutor) driver).executeScript(
+                "var el = arguments[0];"
+                        + "el.dispatchEvent(new PointerEvent('pointerdown', "
+                        + "  {bubbles:true, cancelable:true, pointerType:'mouse'}));"
+                        + "el.dispatchEvent(new PointerEvent('pointerup', "
+                        + "  {bubbles:true, cancelable:true, pointerType:'mouse'}));",
+                element);
+    }
+
+    private void clickWithRetry(WebElement element, int maxAttempts) {
+        int attempts = 0;
+        while (attempts < maxAttempts) {
+            try {
+                element.click();
+                return;
+            } catch (Exception e) {
+                attempts++;
+                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+                if (attempts == maxAttempts) {
+                    ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+                }
+            }
+        }
     }
 
     /**
      * Clicks "Update Ticket" to save the status change.
-     *
-     * <p>After this call the dialog closes and a "Ticket Updated" toast appears.
-     * Do NOT call {@code getStatusFromOpenModal()} after saving — the dialog is gone.
      */
     public void saveStatusChange() {
+        clickUpdateStatusButton();
+    }
+
+    /**
+     * Clicks the "Update Status" / "Update Ticket" button.
+     * Dialog closes automatically after the API responds.
+     * Caller checks the toast BEFORE waiting for modal to close.
+     */
+    public void clickUpdateStatusButton() {
         WebElement btn = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()))
                 .until(ExpectedConditions.elementToBeClickable(BTN_UPDATE_TICKET));
         jsScrollIntoView(btn);
-        jsClick(btn);
-        // Dialog closes automatically after save
-        waitForModalClosed();
+        WebDriverWaitUtil.staticWait(1);
+        // Actions.click() sends a trusted, real browser click — React onClick fires reliably
+        try {
+            new Actions(driver).moveToElement(btn).click().perform();
+        } catch (Exception e) {
+            // Fallback to native click, then JS click
+            try { btn.click(); } catch (Exception e2) {
+                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+            }
+        }
+        // Do NOT block here — toast must be caught before the dialog finishes closing
     }
 
     /**
@@ -460,25 +546,6 @@ public class AdminSupportPage extends BasePage {
             el.click();
         } catch (Exception e) {
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", el);
-        }
-    }
-
-    /**
-     * Clicks via {@link Actions#moveToElement(WebElement)} so that the full pointer-event chain
-     * (pointerdown → mousedown → click) is fired. Required for Radix UI SelectTrigger which
-     * listens on {@code onPointerDown} — a plain {@code element.click()} or JS click will not
-     * open the dropdown because they skip the pointerdown event.
-     */
-    private void actionsClick(WebElement el) {
-        try {
-            new Actions(driver).moveToElement(el).click().perform();
-        } catch (Exception e) {
-            logger.debug("Actions click failed ({}), falling back to native click", e.getMessage());
-            try {
-                el.click();
-            } catch (Exception e2) {
-                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", el);
-            }
         }
     }
 

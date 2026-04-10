@@ -80,14 +80,15 @@ public class SupportPage extends BasePage {
     private static final By CONVERSATION_HEADING = By.xpath(
             "//h4[contains(normalize-space(.),'Conversation')]");
 
-    // ── Validation (inline + toast) ───────────────────────────────────────────
-    // App uses toast notifications for form validation (title "Error")
-    // Also covers role="alert" inline errors as fallback.
-    private static final By ERROR_SIGNALS = By.xpath(
-            "//*[@role='alert'][string-length(normalize-space(.)) > 0]"
+    // ── Validation (toast) ──────────────────────────────────────────────────────
+    // SupportTicketModal shows validation via toast: title "Error", variant "destructive".
+    // Radix Toast renders as <li role="status" data-state="open"> inside <ol class="fixed ...">
+    // The destructive variant adds class "destructive" on the <li>.
+    private static final By ERROR_TOAST = By.xpath(
+            "//li[@data-state='open'][contains(@class,'destructive')]"
+                    + " | //li[@data-state='open'][.//text()[contains(.,'Error')]]"
                     + " | //*[@role='status'][string-length(normalize-space(.)) > 0]"
-                    + " | //ol[contains(@class,'fixed')]//li[@data-state='open']"
-                    + "     [string-length(normalize-space(.)) > 0]");
+                    + " | //*[@role='alert'][string-length(normalize-space(.)) > 0]");
 
     // ═════════════════════════════════════════════════════════════════════════
     // URL helpers
@@ -198,7 +199,7 @@ public class SupportPage extends BasePage {
      * Pass any unique substring (e.g. "Technical" matches "Technical Issue").
      */
     public void selectCategory(String displayText) {
-        clickRadixSelect(TRIGGER_CATEGORY, displayText);
+        selectFromRadixDropdown(TRIGGER_CATEGORY, displayText);
     }
 
     /**
@@ -208,7 +209,7 @@ public class SupportPage extends BasePage {
      * Options: "Low", "Medium", "High".
      */
     public void selectPriority(String displayText) {
-        clickRadixSelect(TRIGGER_PRIORITY, displayText);
+        selectFromRadixDropdown(TRIGGER_PRIORITY, displayText);
     }
 
     /** Clears and types the ticket description. */
@@ -226,10 +227,21 @@ public class SupportPage extends BasePage {
 
     /**
      * Clicks Submit without waiting for the dialog to close (validation / negative-path).
-     * Adds a 1-second static wait so the toast notification has time to appear.
+     *
+     * <p>The form has HTML5 {@code required} attributes on subject and description.
+     * If either is empty, the browser's built-in validation prevents {@code onSubmit}
+     * from firing — no React toast appears.  We click Submit (to trigger the native
+     * validation tooltip) and then also check for the HTML5 validity state.
      */
     public void attemptSubmitTicketForm() {
-        clickSubmitTicket();
+        WebElement btn = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()))
+                .until(ExpectedConditions.elementToBeClickable(BTN_SUBMIT_TICKET));
+        jsScrollIntoView(btn);
+        try {
+            btn.click();
+        } catch (Exception e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
         WebDriverWaitUtil.staticWait(1);
     }
 
@@ -313,11 +325,14 @@ public class SupportPage extends BasePage {
                 "//*[contains(normalize-space(.)," + xpathLiteral(subject) + ")]"
                         + "[not(ancestor::*[@role='dialog'])]"
                         + "/ancestor::*[contains(@class,'justify-between')][1]"
-                        + "/button");
+                        + "//button[contains(@class,'shrink')]");
         WebElement btn = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()))
                 .until(ExpectedConditions.elementToBeClickable(toggleBtn));
         jsScrollIntoView(btn);
-        jsClick(btn);
+        // Native click to trigger React onClick handler
+        clickWithRetry(btn, 3);
+        // Wait for expansion animation
+        WebDriverWaitUtil.staticWait(1);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -329,9 +344,17 @@ public class SupportPage extends BasePage {
      * (ticket detail is expanded).
      */
     public boolean isConversationThreadVisible() {
+        // "Conversation" heading only appears when ticket has responses.
+        // For a new ticket, check for "Description" or "Add a Response" as proof of expansion.
+        By expandedContent = By.xpath(
+                "//h4[contains(normalize-space(.),'Conversation')]"
+                        + " | //*[contains(normalize-space(.),'Description')]"
+                        + "     [ancestor::*[contains(@class,'border-t')]]"
+                        + " | //textarea[contains(@placeholder,'message')]"
+                        + " | //*[contains(normalize-space(.),'Add a Response')]");
         try {
             new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()))
-                    .until(ExpectedConditions.visibilityOfElementLocated(CONVERSATION_HEADING));
+                    .until(ExpectedConditions.visibilityOfElementLocated(expandedContent));
             return true;
         } catch (TimeoutException e) {
             return false;
@@ -368,19 +391,49 @@ public class SupportPage extends BasePage {
      * inline HTML errors.  This method covers both toast ({@code role="status"})
      * and classic inline {@code role="alert"} patterns.
      */
+    /**
+     * Returns {@code true} if validation errors are present.
+     *
+     * <p>Checks three layers:
+     * <ol>
+     *   <li>HTML5 native validation: subject or description has {@code :invalid} pseudo-class
+     *       (browser blocks submit when {@code required} fields are empty)</li>
+     *   <li>React toast: destructive toast with "Error" title</li>
+     *   <li>Inline role="alert" elements</li>
+     * </ol>
+     */
     public boolean isValidationErrorDisplayed() {
-        return driver.findElements(ERROR_SIGNALS).stream()
-                .anyMatch(el -> {
+        // 1. Check HTML5 native validation — required fields that are empty will be :invalid
+        try {
+            Boolean html5Invalid = (Boolean) ((JavascriptExecutor) driver).executeScript(
+                    "var subj = document.getElementById('subject');"
+                            + "var desc = document.getElementById('description');"
+                            + "return (subj && !subj.validity.valid) || (desc && !desc.validity.valid);");
+            if (Boolean.TRUE.equals(html5Invalid)) {
+                return true;
+            }
+        } catch (Exception e) {
+            logger.debug("HTML5 validity check failed: {}", e.getMessage());
+        }
+
+        // 2. Check for toast notifications
+        try {
+            return new WebDriverWait(driver, Duration.ofSeconds(3)).until(d -> {
+                List<WebElement> toasts = d.findElements(ERROR_TOAST);
+                return toasts.stream().anyMatch(el -> {
                     try {
                         if (!el.isDisplayed()) return false;
                         String text = el.getText().toLowerCase();
-                        // Toast with "Error" title OR any element with error-related text
                         return text.contains("error") || text.contains("required")
                                 || text.contains("fill") || text.contains("please enter");
-                    } catch (Exception e) {
+                    } catch (Exception ex) {
                         return false;
                     }
-                });
+                }) ? Boolean.TRUE : null;
+            });
+        } catch (TimeoutException e) {
+            return false;
+        }
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -388,52 +441,68 @@ public class SupportPage extends BasePage {
     // ═════════════════════════════════════════════════════════════════════════
 
     /**
-     * Clicks a Radix UI combobox trigger then selects an option by partial text match.
+     * Selects an option from a Radix UI Select dropdown.
      *
-     * <p><b>Why Actions instead of {@code element.click()} or JS click:</b><br>
-     * Radix UI {@code SelectTrigger} opens the dropdown on {@code onPointerDown}, not {@code onClick}.
-     * JavaScript's {@code element.click()} only dispatches a {@code click} event (no pointer events).
-     * Selenium's {@code element.click()} via ChromeDriver fires the full pointer-event chain,
-     * but can fail with {@code ElementClickInterceptedException} inside dialogs.
-     * {@link org.openqa.selenium.interactions.Actions#click()} fires {@code mousemove → pointerdown →
-     * mousedown → pointerup → mouseup → click} — the complete sequence Radix needs.
-     *
-     * @param triggerLocator {@code By} for the {@code button[@role='combobox']}
-     * @param displayText    visible option text or a unique substring (partial match)
+     * <p>Radix SelectTrigger opens on {@code onPointerDown} and checks
+     * {@code event.pointerType !== ""} — requires {@code pointerType:'mouse'}.
      */
-    private void clickRadixSelect(By triggerLocator, String displayText) {
-        WebElement trigger = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()))
-                .until(ExpectedConditions.elementToBeClickable(triggerLocator));
-        jsScrollIntoView(trigger);
+    public void selectFromRadixDropdown(By triggerLocator, String visibleText) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()));
 
-        // Open the select — must fire pointer events (pointerdown) for Radix to respond
-        actionsClick(trigger);
+        try {
+            // Step 1: Wait & scroll to trigger
+            WebElement trigger = wait.until(ExpectedConditions.elementToBeClickable(triggerLocator));
+            jsScrollIntoView(trigger);
 
-        // SelectContent renders in a portal — wait for role="option" elements to appear
-        By optionLocator = By.xpath(
-                "//*[@role='option'][contains(normalize-space(.)," + xpathLiteral(displayText) + ")]");
-        WebElement option = new WebDriverWait(driver, Duration.ofSeconds(10))
-                .until(ExpectedConditions.elementToBeClickable(optionLocator));
-        actionsClick(option);
+            // Step 2: Open dropdown using JS pointer events (Radix fix)
+            openRadixDropdown(trigger);
+
+            // Step 3: Wait for dropdown (portal rendering)
+            By listboxLocator = By.xpath("(//*[@role='listbox'])[last()]");
+            wait.until(ExpectedConditions.visibilityOfElementLocated(listboxLocator));
+
+            // Step 4: Locate option (partial match — e.g. "Technical" matches "Technical Issue")
+            By optionLocator = By.xpath(
+                    "(//*[@role='option' and contains(normalize-space(.)," + xpathLiteral(visibleText) + ")])[last()]");
+            WebElement option = wait.until(ExpectedConditions.presenceOfElementLocated(optionLocator));
+
+            // Step 5: Scroll option into view (important for virtual lists)
+            jsScrollIntoView(option);
+
+            // Step 6: Click with retry + fallback
+            clickWithRetry(option, 3);
+
+            // Step 7: Wait for dropdown to close
+            wait.until(ExpectedConditions.invisibilityOfElementLocated(listboxLocator));
+
+        } catch (Exception e) {
+            logger.error("Failed to select option: {}", visibleText);
+            throw new RuntimeException("Radix dropdown selection failed for: " + visibleText, e);
+        }
     }
 
-    /**
-     * Fires a full pointer-event sequence (pointerdown → pointerup → click) using
-     * Selenium {@link org.openqa.selenium.interactions.Actions}.
-     * Falls back to native {@code element.click()} if Actions throws.
-     */
-    private void actionsClick(WebElement el) {
-        try {
-            new org.openqa.selenium.interactions.Actions(driver)
-                    .moveToElement(el)
-                    .click()
-                    .perform();
-        } catch (Exception e) {
-            logger.debug("Actions click failed ({}), falling back to native click", e.getMessage());
+    private void openRadixDropdown(WebElement element) {
+        ((JavascriptExecutor) driver).executeScript(
+                "var el = arguments[0];"
+                        + "el.dispatchEvent(new PointerEvent('pointerdown', "
+                        + "  {bubbles:true, cancelable:true, pointerType:'mouse'}));"
+                        + "el.dispatchEvent(new PointerEvent('pointerup', "
+                        + "  {bubbles:true, cancelable:true, pointerType:'mouse'}));",
+                element);
+    }
+
+    private void clickWithRetry(WebElement element, int maxAttempts) {
+        int attempts = 0;
+        while (attempts < maxAttempts) {
             try {
-                el.click();
-            } catch (Exception e2) {
-                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", el);
+                element.click();
+                return;
+            } catch (Exception e) {
+                attempts++;
+                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+                if (attempts == maxAttempts) {
+                    ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+                }
             }
         }
     }
@@ -443,7 +512,13 @@ public class SupportPage extends BasePage {
         WebElement btn = new WebDriverWait(driver, Duration.ofSeconds(ConfigReader.getExplicitWait()))
                 .until(ExpectedConditions.elementToBeClickable(BTN_SUBMIT_TICKET));
         jsScrollIntoView(btn);
-        jsClick(btn);
+        // Native WebDriver click fires a trusted event → triggers form submission + React handler
+        try {
+            btn.click();
+        } catch (Exception e) {
+            // Fallback: HTMLElement.click() also fires a trusted click
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
     }
 
     /**
@@ -464,14 +539,6 @@ public class SupportPage extends BasePage {
     private void jsScrollIntoView(WebElement el) {
         ((JavascriptExecutor) driver).executeScript(
                 "arguments[0].scrollIntoView({block:'center'});", el);
-    }
-
-    private void jsClick(WebElement el) {
-        try {
-            el.click();
-        } catch (Exception e) {
-            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", el);
-        }
     }
 
     private static String xpathLiteral(String s) {

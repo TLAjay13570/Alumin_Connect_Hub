@@ -384,6 +384,13 @@ public class SupportTicketStepDefinitions {
         asp().saveStatusChange();
     }
 
+    @And("I click the update status button")
+    public void clickUpdateStatusButton() {
+        logger.info("Clicking Update Status button");
+        ExtentReportUtil.logInfo("Click Update Status button");
+        asp().clickUpdateStatusButton();
+    }
+
     @Then("the ticket status in admin list should be {string}")
     public void assertAdminListStatus(String expectedStatus) {
         String subject = lastSubjectOrFail();
