@@ -1,0 +1,407 @@
+TC_ID,Module,Test_Case_Title,Preconditions,Test_Steps,Expected_Result,Priority,Type,Tags
+TC_001,Login,Successful login as Super Admin,Application URL is accessible and Super Admin credentials are available,"1. Navigate to the login page
+2. Enter Super Admin username
+3. Enter Super Admin password
+4. Click Login button",User should be logged in successfully and redirected to the dashboard,High,Positive,"Smoke, Login"
+TC_002,Login,Successful login as Admin,Application URL is accessible and Admin credentials are available,"1. Navigate to the login page
+2. Enter Admin username
+3. Enter Admin password
+4. Click Login button",User should be logged in successfully and redirected to the dashboard,High,Positive,"Smoke, Login"
+TC_003,User Management,Create a University Admin user,Logged in as Super Admin and on Users Management page,"1. Click on 'Add User' button
+2. Select role 'University Administrator'
+3. Enter user name 'Test Admin User'
+4. Enter user email 'test.admin@university.edu'
+5. Enter user password 'password123'
+6. Select university 'Massachusetts Institute of Technology'
+7. Click on 'Create User' button","Success message containing 'created' or 'added' is displayed. User 'Test Admin User' appears in the users list.",High,Positive,"Smoke, CreateUser, AdminUser"
+TC_004,User Management,Delete the created University Admin user,TC_003 completed - University Admin user exists in the list,"1. Click on delete button for user 'Test Admin User'
+2. Confirm the deletion","Success message containing 'deleted' or 'removed' is displayed. User 'Test Admin User' is no longer visible in the users list.",High,Positive,"Smoke, DeleteUser"
+TC_005,User Management,Create an Alumni user,Logged in as Super Admin and on Users Management page,"1. Click on 'Add User' button
+2. Select role 'Alumni'
+3. Enter user name 'Test Alumni User'
+4. Enter user email 'test.alumni@alumni.edu'
+5. Enter user password 'password123'
+6. Select university 'Stanford University'
+7. Enter graduation year '2023'
+8. Enter major 'Computer Science'
+9. Click on 'Create User' button","Success message containing 'created' or 'added' is displayed. User 'Test Alumni User' appears in the users list.",High,Positive,"Smoke, CreateUser, AlumniUser"
+TC_006,User Management,Delete the created Alumni user,TC_005 completed - Alumni user exists in the list,"1. Click on delete button for user 'Test Alumni User'
+2. Confirm the deletion","Success message containing 'deleted' or 'removed' is displayed. User 'Test Alumni User' is no longer visible in the users list.",High,Positive,"Smoke, DeleteUser"
+TC_007,User Management,Delete a user (full create and delete flow),Logged in as Super Admin and on Users Management page,"1. Click on 'Add User' button
+2. Select role 'Alumni'
+3. Enter user name 'Delete Test User'
+4. Enter user email 'delete.test@alumni.edu'
+5. Enter user password 'password123'
+6. Select university 'Massachusetts Institute of Technology'
+7. Enter graduation year '2022'
+8. Enter major 'Business'
+9. Click on 'Create User' button
+10. Verify success message appears
+11. Click on delete button for user 'Delete Test User'
+12. Confirm the deletion","Success message containing 'deleted' or 'removed' is displayed. User 'Delete Test User' is no longer visible in the users list.",High,Positive,"Smoke, DeleteUser"
+TC_008,University Management,Add a new university,Logged in as Super Admin and on Universities Management page,"1. Click on 'Add University' button
+2. Enter university ID 'test-auto-uni'
+3. Enter university name 'Test Auto University'
+4. Enter university logo URL
+5. Click on 'Create' or 'Save' button","Success message containing 'created' or 'added' is displayed. University 'Test Auto University' appears in the university list.",High,Positive,"Smoke, Add"
+TC_009,University Management,Edit an existing university,Logged in as Super Admin and on Universities Management page,"1. Create a university 'Edit Test University' with ID 'edit-test-uni'
+2. Click on edit button for university 'Edit Test University'
+3. Update university name to 'Updated Test University'
+4. Click on 'Update' or 'Save' button","Success message containing 'updated' or 'saved' is displayed. University 'Updated Test University' appears in the university list.",High,Positive,"Smoke, Edit"
+TC_010,University Management,Delete a university,Logged in as Super Admin and on Universities Management page,"1. Create a university 'Delete Test University' with ID 'delete-test-uni'
+2. Click on delete button for university 'Delete Test University'
+3. Confirm the deletion","Success message containing 'deleted' or 'removed' is displayed. University 'Delete Test University' is no longer visible in the university list.",High,Positive,"Smoke, Delete"
+TC_011,Event Management,Create a new event,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Test Automation Event'
+3. Enter event description 'This is a test event created by automation'
+4. Enter event date '12/31/2030'
+5. Enter event start time '10:00 AM'
+6. Enter event end time '11:00 AM'
+7. Enter event location 'Test Location'
+8. Select event category 'Networking'
+9. Click on 'Create Event' button in modal","Event 'Test Automation Event' appears in the events list.",High,Positive,"Smoke, CreateEvent"
+TC_012,Event Management,Delete the created event,TC_011 completed - Test event exists in the events list,"1. Delete event 'Test Automation Event' if it exists
+2. Verify cleanup","All test events should be cleaned up and no longer visible in the list.",High,Positive,"Smoke, DeleteEvent, Cleanup"
+TC_013,Event Management - Admin Functional,Refresh keeps event management page usable,Logged in as Admin and on Events Management page,"1. Click refresh on the admin events page
+2. Verify page content","'Event Management' text should be visible on the page.",Medium,Positive,"Regression, Events"
+TC_014,Event Management - Admin Functional,Cancel create event closes modal without saving,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Should Not Persist Cancel Test'
+3. Click Cancel in the event modal","The event modal should be closed. Event 'Should Not Persist Cancel Test' should NOT appear in the events list.",Medium,Positive,"Regression, Events"
+TC_015,Event Management - Admin Functional,Create a virtual event with meeting link (Zoom),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Virtual Functional Event'
+3. Enter event description 'Online session for automation'
+4. Enter event date '12/31/2030'
+5. Enter start time '2:00 PM' and end time '3:30 PM'
+6. Select event category 'Academic'
+7. Toggle virtual event switch ON
+8. Enter meeting link 'https://zoom.us/j/123456789'
+9. Click on 'Create Event' button in modal","Event 'Virtual Functional Event' appears in the events list.",Medium,Positive,"Regression, Virtual"
+TC_016,Event Management - Admin Functional,Create a virtual event with meeting link (Google Meet),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Virtual Meet Event'
+3. Enter event description 'Second virtual dataset'
+4. Enter event date '12/31/2030'
+5. Enter start time '3:00 PM' and end time '4:00 PM'
+6. Select event category 'Academic'
+7. Toggle virtual event switch ON
+8. Enter meeting link 'https://meet.google.com/abc-def-ghi'
+9. Click on 'Create Event' button in modal","Event 'Virtual Meet Event' appears in the events list.",Medium,Positive,"Regression, Virtual"
+TC_017,Event Management - Admin Functional,Create private event and see Private badge,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Private Functional Event'
+3. Enter event description 'Invite-only automation event'
+4. Enter event date '12/31/2030'
+5. Enter start time '9:00 AM' and end time '10:00 AM'
+6. Enter event location 'Boston Campus'
+7. Select event category 'Networking'
+8. Toggle public event OFF
+9. Click on 'Create Event' button in modal","Event 'Private Functional Event' appears in the events list. 'Private' badge text is visible on the page.",Medium,Positive,"Regression, Private"
+TC_018,Event Management - Admin Functional,Edit event title and persist changes,Logged in as Admin and on Events Management page,"1. Create an event 'Func Edit Seed Event' with standard details
+2. Click Edit for event containing 'Func Edit Seed Event'
+3. Replace event title with 'Func Edit Updated Event'
+4. Click on 'Update Event' button in modal","Event 'Func Edit Updated Event' appears in the events list.",Medium,Positive,"Regression, Edit"
+TC_019,Event Management - Admin Functional,Search filters admin events list by title,Logged in as Admin and on Events Management page,"1. Create an event 'SearchUniqueMarker Event' with standard details
+2. Search admin events for 'SearchUniqueMarker'
+3. Verify filtered results","Event 'SearchUniqueMarker Event' should be visible in the filtered events list.",Medium,Positive,"Regression, Search"
+TC_020,Event Management - Admin Functional,Status filter Upcoming still shows a new event,Logged in as Admin and on Events Management page,"1. Create an event 'Upcoming Filter Event' with future date '12/31/2030'
+2. Click admin events status filter 'Upcoming'
+3. Verify event is visible
+4. Click admin events status filter 'Total'","Event 'Upcoming Filter Event' should appear when 'Upcoming' filter is applied.",Medium,Positive,"Regression, Filter"
+TC_021,Event Management - Admin Functional,Delete event with browser confirm removes it from list,Logged in as Admin and on Events Management page,"1. Create an event 'Delete Confirm Event' with standard details
+2. Click delete for event containing 'Delete Confirm Event'
+3. Accept the browser confirm for event deletion","Event 'Delete Confirm Event' should NOT appear in the events list.",Medium,Positive,"Regression, Delete"
+TC_022,Event Management - Admin Functional,Optional max attendees is accepted on create (25),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Max Attendees Event'
+3. Enter all required fields
+4. Enter max attendees '25'
+5. Click on 'Create Event' button in modal","Event 'Max Attendees Event' appears in the events list with max attendees set to 25.",Medium,Positive,"Regression, MaxAttendees"
+TC_023,Event Management - Admin Functional,Optional max attendees is accepted on create (50),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Max Attendees Event 50'
+3. Enter all required fields
+4. Enter max attendees '50'
+5. Click on 'Create Event' button in modal","Event 'Max Attendees Event 50' appears in the events list with max attendees set to 50.",Medium,Positive,"Regression, MaxAttendees"
+TC_024,Event Management - Form Validation,Title is required validation,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event description 'Missing title case'
+3. Enter event date '12/31/2030'
+4. Enter start time '10:00 AM' and end time '11:00 AM'
+5. Enter event location 'Somewhere'
+6. Submit the event form
+7. Click Cancel in the event modal","Validation error message 'Title is required' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_025,Event Management - Form Validation,Description is required validation,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'No Description Title'
+3. Clear the event description field
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM' and end time '11:00 AM'
+6. Enter event location 'Somewhere'
+7. Submit the event form
+8. Click Cancel in the event modal","Validation error message 'Description is required' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_026,Event Management - Form Validation,End time must be after start time (end before start),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Bad Time Range'
+3. Enter event description 'End before start'
+4. Enter event date '12/31/2030'
+5. Enter start time '11:00 AM'
+6. Enter end time '10:00 AM'
+7. Enter event location 'Clock Tower'
+8. Submit the event form","Validation error message 'End time must be after start time' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_027,Event Management - Form Validation,End time must be after start time (same start and end),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Equal Time Bad'
+3. Enter event description 'Same start end'
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM'
+6. Enter end time '10:00 AM'
+7. Enter event location 'Clock Tower'
+8. Submit the event form","Validation error message 'End time must be after start time' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_028,Event Management - Form Validation,In-person events require location,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'No Location'
+3. Enter event description 'Missing location'
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM' and end time '11:00 AM'
+6. Leave location field empty
+7. Submit the event form","Validation error message 'Location is required' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_029,Event Management - Form Validation,Virtual events require meeting link,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Virtual No Link'
+3. Enter event description 'Virtual without URL'
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM' and end time '11:00 AM'
+6. Toggle virtual event switch ON
+7. Leave meeting link empty
+8. Submit the event form","Validation error message 'Meeting link is required' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_030,Event Management - Form Validation,Virtual meeting link must be a valid URL (invalid text),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Bad Meeting URL'
+3. Enter event description 'Invalid link'
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM' and end time '11:00 AM'
+6. Toggle virtual event switch ON
+7. Enter meeting link 'not-a-valid-url'
+8. Submit the event form","Validation error message containing 'valid URL' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_031,Event Management - Form Validation,Virtual meeting link must be a valid URL (malformed URL),Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Bad Meeting URL 2'
+3. Enter event description 'Bad zoom'
+4. Enter event date '12/31/2030'
+5. Enter start time '11:00 AM' and end time '12:00 PM'
+6. Toggle virtual event switch ON
+7. Enter meeting link ':::noturl'
+8. Submit the event form","Validation error message containing 'valid URL' should be displayed.",High,Negative,"Regression, Negative, Validation"
+TC_032,Event Management - Form Validation,Optional image URL must be valid when provided,Logged in as Admin and on Events Management page. Extended event modal with image URL field is available.,"1. Click on the Create Event button
+2. Enter event title 'Bad Image URL'
+3. Enter event description 'Bad banner'
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM' and end time '11:00 AM'
+6. Enter event location 'Gallery'
+7. Select event category 'Academic'
+8. Enter event image URL 'not-a-url'
+9. Submit the event form","Validation error message containing 'valid image URL' should be displayed.",Medium,Negative,"Regression, Negative, RequiresExtendedEventModal"
+TC_033,Event Management - Form Validation,Max attendees must be at least 1 when set,Logged in as Admin and on Events Management page,"1. Click on the Create Event button
+2. Enter event title 'Zero Capacity'
+3. Enter event description 'Invalid max'
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM' and end time '11:00 AM'
+6. Enter event location 'Hall'
+7. Enter max attendees '0'
+8. Submit the event form","Validation error message 'Max attendees must be at least 1' should be displayed.",Medium,Negative,"Regression, Negative, Validation"
+TC_034,Event Management - Form Validation,Registration deadline must be before event date,Logged in as Admin and on Events Management page. Extended event modal with registration deadline field is available.,"1. Click on the Create Event button
+2. Enter event title 'Bad Deadline'
+3. Enter event description 'Deadline after event'
+4. Enter event date '12/31/2030'
+5. Enter start time '10:00 AM' and end time '11:00 AM'
+6. Enter event location 'Campus'
+7. Enter registration deadline '01/15/2031' (after event date)
+8. Submit the event form","Validation error message containing 'Registration deadline must be before' should be displayed.",Medium,Negative,"Regression, Negative, RequiresExtendedEventModal"
+TC_035,Event Management - Alumni E2E,MIT admin creates event and MIT alumni sees notification and registers,MIT admin and MIT alumni credentials available. Both belong to same institution.,"1. Login as MIT admin
+2. Navigate to events management page
+3. Create event 'Alumni E2E Notify Register Ev' with date 12/31/2030 10:00-11:00 AM at 'Automation Test Venue' category 'Networking'
+4. Verify event appears in events list
+5. Wait for notifications to propagate
+6. Logout and clear session
+7. Login as MIT alumni
+8. Verify a notification referring to the created event is visible
+9. Navigate to the alumni events page
+10. Select the Upcoming tab
+11. Search alumni events for 'Alumni E2E Notify Register Ev'
+12. Register for the event
+13. Verify registration confirmation","Admin: Event is created successfully and visible in list. Alumni: Notification is received. Event is found in Upcoming tab. Registration is successful and confirmed.",Critical,Positive,"Integration, E2E, Events, Alumni"
+TC_036,Ads Management,Create an image ad for all universities,Logged in as Super Admin and on Ads Management page,"1. Click on the Create Ad button
+2. Enter ad title 'Test Image Ad'
+3. Enter ad description 'This is a test advertisement for automation'
+4. Select media type 'Image'
+5. Enter media URL (valid image URL)
+6. Enter link URL 'https://example.com/promo'
+7. Check 'Show to all universities' checkbox
+8. Click on 'Create Ad' button in modal","Success message containing 'Ad created' or 'created' is displayed. Ad 'Test Image Ad' appears in the ads list.",High,Positive,"Smoke, CreateAd"
+TC_037,Ads Management,Delete the created ad,TC_036 completed - Test ad exists in the ads list,"1. Delete ad 'Test Image Ad' if it exists
+2. Verify cleanup","All test ads should be cleaned up and no longer visible in the ads list.",High,Positive,"Smoke, DeleteAd, Cleanup"
+TC_038,Fundraiser Management,Admin opens fundraiser management and sees dashboard widgets,Logged in as MIT admin,"1. Navigate to the admin fundraiser management page
+2. Verify page loads","Fundraiser management page is displayed. Fundraiser statistics section is visible with dashboard widgets.",High,Positive,"Smoke, Fundraiser"
+TC_039,Fundraiser Management,Admin creates a fundraiser and sees it in the list,Logged in as MIT admin,"1. Navigate to the admin fundraiser management page
+2. Open the create fundraiser dialog
+3. Enter campaign title
+4. Enter description 'Automation campaign supporting students.'
+5. Enter goal amount '50000'
+6. Enter current amount '1000'
+7. Enter donation link 'https://example.org/donate-automation'
+8. Set fundraiser dates to active campaign range
+9. Submit the fundraiser create form","Toast message 'Fundraiser created' is displayed. Fundraiser list shows a card with the created campaign title.",High,Positive,"Regression, Fundraiser"
+TC_040,Fundraiser Management,Admin edits fundraiser description,Logged in as MIT admin with a fundraiser already created,"1. Navigate to the admin fundraiser management page
+2. Create a fundraiser with description 'Original description.'
+3. Open edit fundraiser for the created title
+4. Change description to 'Updated description for automation.'
+5. Submit the fundraiser update form","Toast message 'Fundraiser updated' is displayed. Fundraiser description is updated.",Medium,Positive,"Regression, Fundraiser"
+TC_041,Fundraiser Management,Admin disables and re-enables a fundraiser,Logged in as MIT admin with a fundraiser already created,"1. Navigate to the admin fundraiser management page
+2. Create a fundraiser with description 'Toggle active state test.'
+3. Click disable for the fundraiser
+4. Verify toast and badge
+5. Click enable for the fundraiser
+6. Verify toast","On disable: Toast containing 'deactivated' is displayed. Fundraiser card shows 'Disabled' badge. On enable: Toast containing 'activated' is displayed.",Medium,Positive,"Regression, Fundraiser"
+TC_042,Fundraiser Management,Admin deletes a fundraiser after confirmation,Logged in as MIT admin,"1. Navigate to the admin fundraiser management page
+2. Create a fundraiser with description 'To be deleted.'
+3. Delete the fundraiser
+4. Confirm the deletion","Toast message 'Fundraiser deleted' is displayed. Fundraiser is no longer visible in the list.",High,Positive,"Regression, Fundraiser, Cleanup"
+TC_043,Fundraiser Management,Alumni session cannot use admin fundraiser management URL,MIT alumni credentials available,"1. Login as MIT admin then logout
+2. Login as MIT alumni
+3. Navigate directly to the admin fundraiser URL","Alumni should NOT remain on the admin fundraiser management page. User should be redirected away.",High,Positive,"Regression, Fundraiser, AccessControl"
+TC_044,Fundraiser Management,Unauthenticated user cannot open admin fundraiser management,No active session,"1. Logout and clear session
+2. Open the admin fundraiser page URL without authentication","User should be redirected to the login flow or away from admin fundraiser management page.",High,Positive,"Regression, Fundraiser, AccessControl"
+TC_045,Fundraiser Validation,Create fundraiser fails when campaign title is missing,Logged in as MIT admin on the fundraiser management page,"1. Open the create fundraiser dialog
+2. Enter goal amount '10000'
+3. Enter donation link 'https://example.org/donate'
+4. Set fundraiser dates to active campaign range
+5. Leave campaign title empty
+6. Attempt to submit the form","Toast message 'Missing information' is displayed. Form is not submitted.",High,Negative,"Regression, FundraiserValidation"
+TC_046,Fundraiser Validation,Create fundraiser fails when goal amount is missing,Logged in as MIT admin on the fundraiser management page,"1. Open the create fundraiser dialog
+2. Enter campaign title
+3. Enter description 'Validation test without goal.'
+4. Enter donation link 'https://example.org/donate'
+5. Set fundraiser dates to active campaign range
+6. Clear the goal amount field
+7. Attempt to submit the form","Toast message 'Missing information' is displayed. Form is not submitted.",High,Negative,"Regression, FundraiserValidation"
+TC_047,Fundraiser Validation,Create fundraiser fails when start or end date is missing,Logged in as MIT admin on the fundraiser management page,"1. Open the create fundraiser dialog
+2. Enter campaign title
+3. Enter goal amount '5000'
+4. Enter donation link 'https://example.org/donate'
+5. Do NOT set start or end dates
+6. Attempt to submit the form","Toast message 'Missing information' is displayed. Form is not submitted.",High,Negative,"Regression, FundraiserValidation"
+TC_048,Support Ticket,Alumni can open the support ticket page,Logged in as MIT alumni,"1. Navigate to the support ticket page
+2. Verify page loads","Support ticket page is displayed successfully.",High,Positive,"Smoke, SupportTicket"
+TC_049,Support Ticket,Alumni creates a High-priority Technical ticket,Logged in as MIT alumni,"1. Navigate to the support ticket page
+2. Click the Create Ticket button
+3. Enter ticket subject 'Login Issue'
+4. Select ticket category 'Technical'
+5. Select ticket priority 'High'
+6. Enter ticket description 'I cannot log into the portal after my password reset. Please assist.'
+7. Submit the ticket form","Toast message containing 'submitted' is displayed. The ticket appears in the ticket list.",High,Positive,"Smoke, CreateTicket"
+TC_050,Support Ticket,Alumni creates a Medium-priority General ticket,Logged in as MIT alumni,"1. Navigate to the support ticket page
+2. Click the Create Ticket button
+3. Enter ticket subject 'Portal Navigation'
+4. Select ticket category 'General'
+5. Select ticket priority 'Medium'
+6. Enter ticket description 'I need help navigating the alumni portal features.'
+7. Submit the ticket form","Toast message containing 'submitted' is displayed. The ticket appears in the ticket list.",Medium,Positive,"Regression, CreateTicket"
+TC_051,Support Ticket,Alumni creates a Low-priority Academic ticket,Logged in as MIT alumni,"1. Navigate to the support ticket page
+2. Click the Create Ticket button
+3. Enter ticket subject 'Transcript Request'
+4. Select ticket category 'Academic'
+5. Select ticket priority 'Low'
+6. Enter ticket description 'I would like to request an official transcript from the university.'
+7. Submit the ticket form","Toast message containing 'submitted' is displayed. The ticket appears in the ticket list.",Medium,Positive,"Regression, CreateTicket"
+TC_052,Support Ticket,Alumni opens a created ticket and sees the conversation section,Logged in as MIT alumni with a ticket already created,"1. Navigate to the support ticket page
+2. Create a ticket with subject 'View Conversation' category 'Technical' priority 'Medium'
+3. Open the ticket with the created subject","Conversation thread section is visible within the ticket detail.",Medium,Positive,"Regression, SupportTicket"
+TC_053,Support Ticket,Admin views the support tickets management page,Logged in as MIT admin,"1. Navigate to the admin support tickets page
+2. Verify page content","Admin support tickets page is displayed. Ticket list table is visible.",High,Positive,"Smoke, Admin, SupportTicket"
+TC_054,Support Ticket,Admin opens a ticket detail modal and sees the conversation,Logged in as MIT alumni (to create ticket) then MIT admin,"1. Login as MIT alumni
+2. Create a ticket with subject 'Admin Detail Check' category 'Technical' priority 'High'
+3. Logout and clear session
+4. Login as MIT admin
+5. Navigate to the admin support tickets page
+6. Open the ticket detail for the created subject","Ticket detail modal is open. Conversation is visible in the modal.",Medium,Positive,"Regression, Admin, SupportTicket"
+TC_055,Support Ticket,Admin replies to an alumni support ticket,Logged in as MIT alumni (to create ticket) then MIT admin,"1. Login as MIT alumni
+2. Create a ticket with subject 'Needs Admin Reply' category 'Technical' priority 'Medium'
+3. Logout and clear session
+4. Login as MIT admin
+5. Navigate to the admin support tickets page
+6. Open the ticket detail for the created subject
+7. Enter admin reply 'Please navigate to Profile Settings to update your photo.'
+8. Send the admin reply","Toast message 'Response Sent' is displayed. Reply is visible in the conversation thread.",High,Positive,"Regression, Admin, Reply"
+TC_056,Support Ticket,Admin changes ticket status to In Progress,Logged in as MIT alumni (to create ticket) then MIT admin,"1. Login as MIT alumni
+2. Create a ticket with subject 'Status InProgress' category 'General' priority 'Low'
+3. Logout and clear session
+4. Login as MIT admin
+5. Navigate to the admin support tickets page
+6. Open the ticket detail for the created subject
+7. Change the ticket status to 'In Progress'
+8. Click the update status button","Toast message containing 'updated' is displayed. Ticket status changes to 'In Progress' in the list.",Medium,Positive,"Regression, Admin, StatusChange"
+TC_057,Support Ticket,Admin closes a resolved ticket,Logged in as MIT alumni (to create ticket) then MIT admin,"1. Login as MIT alumni
+2. Create a ticket with subject 'Close Ticket' category 'Technical' priority 'High'
+3. Logout and clear session
+4. Login as MIT admin
+5. Navigate to the admin support tickets page
+6. Open the ticket detail for the created subject
+7. Change the ticket status to 'Closed'
+8. Click the update status button","Toast message containing 'updated' is displayed. Ticket status changes to 'Closed' in the list.",Medium,Positive,"Regression, Admin, StatusChange, Cleanup"
+TC_058,Support Ticket,Full E2E flow - alumni creates ticket then admin replies and sets status then alumni verifies,"MIT alumni and MIT admin credentials available. Both belong to same institution.","1. Login as MIT alumni
+2. Navigate to support ticket page
+3. Create a ticket with subject 'E2E Full Flow' category 'Technical' priority 'High'
+4. Verify toast 'submitted' and ticket in list
+5. Logout and clear session
+6. Login as MIT admin
+7. Navigate to admin support tickets page
+8. Open ticket detail for the created subject
+9. Enter admin reply 'Your issue has been reviewed and is now being processed by our team.'
+10. Send the admin reply
+11. Verify toast 'Response Sent'
+12. Re-open the ticket detail
+13. Change ticket status to 'In Progress'
+14. Click update status button
+15. Verify toast 'updated'
+16. Logout and clear session
+17. Login as MIT alumni
+18. Navigate to support ticket page
+19. Open the ticket with created subject
+20. Verify conversation thread is visible
+21. Verify admin reply 'Your issue has been reviewed' is visible in the conversation","Alumni: Ticket created successfully. Admin: Reply sent and status updated to In Progress. Alumni: Can see the admin reply in conversation thread.",Critical,Positive,"E2E, Regression, SupportTicket"
+TC_059,Support Ticket Validation,Alumni submits a ticket with a very long description,Logged in as MIT alumni on the support ticket page with Create Ticket dialog open,"1. Enter ticket subject 'Long Description Edge'
+2. Select ticket category 'General'
+3. Select ticket priority 'Low'
+4. Enter a very long description (500+ characters with detailed text)
+5. Submit the ticket form","Toast message containing 'submitted' is displayed. Ticket is created and visible in the list. Long description is not truncated.",Medium,Positive,"EdgeCase, Regression, SupportTicketValidation"
+TC_060,Support Ticket Validation,Alumni submits a ticket with minimum valid inputs,Logged in as MIT alumni on the support ticket page with Create Ticket dialog open,"1. Enter ticket subject 'X' (single character)
+2. Select ticket category 'General'
+3. Select ticket priority 'Low'
+4. Enter ticket description 'Minimal.'
+5. Submit the ticket form","Toast message containing 'submitted' is displayed. Ticket is created with minimal inputs.",Medium,Positive,"EdgeCase, Regression, SupportTicketValidation"
+TC_061,Support Ticket Validation,Admin sends a reply with a very long message,Logged in as MIT alumni (to create ticket) then MIT admin,"1. Login as MIT alumni
+2. Create a ticket with subject 'Admin Long Reply'
+3. Logout and clear session
+4. Login as MIT admin
+5. Navigate to admin support tickets page
+6. Open the ticket detail for the created subject
+7. Enter a very long admin reply (500+ characters)
+8. Send the admin reply","Toast message 'Response Sent' is displayed. Long reply is accepted and visible in conversation without truncation.",Medium,Positive,"EdgeCase, Admin, Regression, SupportTicketValidation"
+TC_062,Directory,Alumni can open the Directory page,Logged in as MIT alumni,"1. Navigate to the directory page
+2. Verify page header
+3. Verify search input visibility
+4. Verify tabs are displayed","Directory page header shows 'Directory'. Search input is visible. Tabs displayed: My Connections, Suggestions, Requests, Sent, Global Map.",High,Positive,"Smoke, Navigation, Directory"
+TC_063,Directory,Alumni can view the list of members on the directory,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Verify member cards are displayed","At least 1 member card is displayed. Each member card shows name, job title and company.",High,Positive,"Smoke, ListView, Directory"
+TC_064,Directory,Alumni can search members by name,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Search the directory for 'Bob'
+3. Verify search results","Directory displays only members matching 'Bob'. Member count is greater than 0.",Medium,Positive,"Smoke, Search, Directory"
+TC_065,Directory,Alumni can search members by company,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Search the directory for 'Tech Company'
+3. Verify search results","Directory displays only members matching 'Tech Company'. Member count is greater than 0.",Medium,Positive,"Smoke, Search, Directory"
+TC_066,Directory,Alumni can search members by job title,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Search the directory for 'Software Engineer'
+3. Verify search results","Directory displays only members matching 'Software Engineer'. Member count is greater than 0.",Medium,Positive,"Smoke, Search, Directory"
+TC_067,Directory,Searching for a non-existing member shows no-results state,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Search the directory for 'zzz-no-such-member-xyz'
+3. Verify no-results state","Directory shows the no-results empty state.",Medium,Positive,"Smoke, Search, NoResults, Directory"
+TC_068,Directory,Alumni can switch to My Connections tab,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory","'My Connections' tab panel is visible.",Low,Positive,"Smoke, Filter, Directory"
+TC_069,Directory,Alumni can switch to Suggestions tab,Logged in as MIT alumni and on Directory page,"1. Select the 'Suggestions' tab on directory","'Suggestions' tab panel is visible.",Low,Positive,"Smoke, Filter, Directory"
+TC_070,Directory,Alumni can switch to Requests tab,Logged in as MIT alumni and on Directory page,"1. Select the 'Requests' tab on directory","'Requests' tab panel is visible.",Low,Positive,"Smoke, Filter, Directory"
+TC_071,Directory,Alumni can switch to Sent tab,Logged in as MIT alumni and on Directory page,"1. Select the 'Sent' tab on directory","'Sent' tab panel is visible.",Low,Positive,"Smoke, Filter, Directory"
+TC_072,Directory,Alumni can switch to Global Map tab,Logged in as MIT alumni and on Directory page,"1. Select the 'Global Map' tab on directory","'Global Map' tab panel is visible.",Low,Positive,"Smoke, Filter, Directory"
+TC_073,Directory,Alumni can view a member's card details,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Open the first member on the directory","Member's name, job title, company, university and year should be displayed.",Medium,Positive,"Smoke, ProfileView, Directory"
+TC_074,Directory,Alumni can open a member's full profile via View Profile,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Click the View Profile button on the first directory member","User should be navigated away from the directory page to the member's full profile.",Medium,Positive,"Smoke, ProfileView, Directory"
+TC_075,Directory,Alumni can initiate a chat with a directory member,Logged in as MIT alumni and on Directory page,"1. Select the 'My Connections' tab on directory
+2. Click the Message button on the first directory member","User should be navigated to the chat page.",Medium,Positive,"Smoke, Message, Directory"
+TC_076,Directory,Alumni can view the global alumni distribution map,Logged in as MIT alumni and on Directory page,"1. Select the 'Global Map' tab on directory","Global alumni distribution map should be visible.",Medium,Positive,"Smoke, GlobalMap, Directory"
