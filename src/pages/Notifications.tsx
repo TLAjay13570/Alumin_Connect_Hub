@@ -227,14 +227,32 @@ const Notifications = () => {
 
             {/* Notifications List */}
             {displayedNotifications.length === 0 ? (
-              <Card className="p-12 text-center">
-                <Bell className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <h3 className="text-lg font-semibold mb-2">No notifications</h3>
-                <p className="text-muted-foreground">
-                  {filter === 'unread' 
-                    ? "You're all caught up! No unread notifications."
-                    : "You don't have any notifications yet."}
-                </p>
+              <Card className="p-10 text-center border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+                <div className="flex flex-col items-center justify-center">
+                  <div className="relative mb-5">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500/10 to-green-500/5 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center">
+                        <Bell className="w-7 h-7 text-green-500/60" />
+                      </div>
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-green-500" />
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">
+                    {filter === 'unread' ? "You're All Caught Up!" : 'No Notifications'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground max-w-sm">
+                    {filter === 'unread' 
+                      ? "Great job! You've read all your notifications. New activity will appear here."
+                      : "You don't have any notifications yet. Engage with the community to start seeing updates!"}
+                  </p>
+                  {filter === 'unread' && (
+                    <Button variant="outline" className="mt-4" onClick={() => setFilter('all')}>
+                      View All Notifications
+                    </Button>
+                  )}
+                </div>
               </Card>
             ) : (
               <div className="space-y-2">

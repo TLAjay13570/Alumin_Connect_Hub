@@ -1,9 +1,9 @@
-const CACHE_NAME = 'alumnihub-v1';
+const CACHE_NAME = 'alumnihub-v2'; // Bumped version to clear old cache
 const urlsToCache = [
   '/',
-  '/login',
   '/index.html',
   '/manifest.json',
+  // DO NOT cache /login or any /api routes
 ];
 
 // Install event - cache essential resources
@@ -32,7 +32,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches (including v1 with /login)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -44,40 +44,47 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
+    }).then(() => {
+      // Force claim to activate immediately
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - MINIMAL handler, bypass everything except static assets
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  const request = event.request;
+  
+  // CRITICAL RULES:
+  // ❌ Never cache /login, /auth, /api
+  // ❌ Never intercept POST/PUT/DELETE/PATCH
+  // ❌ Never intercept external API calls
+  // ✅ Only cache same-origin static assets (GET requests)
+  
+  // BYPASS service worker for:
+  if (
+    // API endpoints
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/auth/') ||
+    url.pathname === '/login' ||
+    // External backend
+    url.hostname !== self.location.hostname ||
+    // Non-GET methods
+    request.method !== 'GET' ||
+    // Credentials or auth headers
+    request.credentials === 'include' ||
+    request.headers.get('Authorization')
+  ) {
+    // Don't intercept - let browser handle normally
+    return;
+  }
+  
+  // Only cache same-origin GET requests for static assets
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-
-        return fetch(event.request).then(
-          (response) => {
-            // Check if valid response
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-
-            // Clone the response
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-
-            return response;
-          }
-        );
-      })
+    caches.match(request)
+      .then((cached) => cached || fetch(request))
+      .catch(() => fetch(request))
   );
 });
 

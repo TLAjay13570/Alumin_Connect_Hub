@@ -1,277 +1,237 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Trash2, 
   MessageCircle, 
   Search, 
   AlertCircle, 
-  Pin, 
-  PinOff,
-  Eye,
-  EyeOff,
-  RotateCcw,
-  RefreshCw,
-  ThumbsUp,
+  Edit, 
+  Heart,
   Loader2,
-  CheckCircle,
-  XCircle,
+  RefreshCw,
+  X,
+  Check,
+  FileText,
+  Plus
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { feedService } from '@/services/feedService';
-import { ApiPost, PostStatus } from '@/types/feed';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
-type StatusFilter = PostStatus | 'all';
+interface Author {
+  id: string;
+  name: string;
+  avatar?: string;
+  title?: string;
+  company?: string;
+}
 
-interface ActionLoadingState {
-  [postId: number]: {
-    hide?: boolean;
-    restore?: boolean;
-    pin?: boolean;
-  };
+interface Post {
+  id: string;
+  author: Author;
+  type: string;
+  content: string;
+  media_url?: string;
+  video_url?: string;
+  thumbnail_url?: string;
+  tag?: string;
+  job_title?: string;
+  company?: string;
+  location?: string;
+  likes_count: number;
+  comments_count: number;
+  shares_count: number;
+  is_liked: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  time: string;
+  created_at: string;
+}
+
+interface Comment {
+  id: string;
+  content: string;
+  author: Author;
+  created_at: string;
+  time?: string;
 }
 
 const AdminFeedManager = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  
-  // Posts state
-  const [posts, setPosts] = useState<ApiPost[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalPosts, setTotalPosts] = useState(0);
-  const pageSize = 10;
-  
-  // Filter state
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingComments, setLoadingComments] = useState<string | null>(null);
   
-  // Expanded comments state
-  const [expandedPost, setExpandedPost] = useState<number | null>(null);
-  
-  // Action loading states (per-post)
-  const [actionLoading, setActionLoading] = useState<ActionLoadingState>({});
-  
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-      setCurrentPage(1); // Reset to first page on search
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+  // Edit state
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch posts
-  const fetchPosts = useCallback(async () => {
+  // Load posts from API
+  const loadPosts = async () => {
     setIsLoading(true);
-    setError(null);
-    
     try {
-      const response = await feedService.adminListPosts({
-        page: currentPage,
-        page_size: pageSize,
-        university_id: user?.universityId ? Number(user.universityId) : undefined,
-        status_filter: statusFilter === 'all' ? undefined : statusFilter,
-        search: debouncedSearch || undefined,
-      });
-      
+      const response = await apiClient.getPosts(1, 100);
       setPosts(response.posts);
-      setTotalPages(response.total_pages);
-      setTotalPosts(response.total);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load posts';
-      setError(errorMessage);
+    } catch (error: any) {
+      console.error('Failed to load posts:', error);
       toast({
-        title: 'Error loading posts',
-        description: errorMessage,
+        title: 'Error',
+        description: 'Failed to load posts. Please try again.',
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, pageSize, user?.universityId, statusFilter, debouncedSearch, toast]);
+  };
 
   useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
+    loadPosts();
+  }, []);
 
-  // Handle hide post
-  const handleHidePost = async (postId: number) => {
-    setActionLoading(prev => ({ ...prev, [postId]: { ...prev[postId], hide: true } }));
-    
+  // Load comments for a post
+  const loadComments = async (postId: string) => {
+    setLoadingComments(postId);
     try {
-      await feedService.hidePost(postId);
-      
-      // Update local state optimistically
-      setPosts(prev => prev.map(post => 
-        post.id === postId ? { ...post, status: 'hidden' as PostStatus } : post
-      ));
-      
+      const postComments = await apiClient.getComments(postId);
+      setComments(prev => ({ ...prev, [postId]: postComments }));
+    } catch (error: any) {
+      console.error('Failed to load comments:', error);
       toast({
-        title: 'Post hidden',
-        description: 'The post has been hidden from the feed',
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to hide post';
-      toast({
-        title: 'Failed to hide post',
-        description: errorMessage,
+        title: 'Error',
+        description: 'Failed to load comments.',
         variant: 'destructive',
       });
     } finally {
-      setActionLoading(prev => ({ ...prev, [postId]: { ...prev[postId], hide: false } }));
+      setLoadingComments(null);
     }
   };
 
-  // Handle restore post
-  const handleRestorePost = async (postId: number) => {
-    setActionLoading(prev => ({ ...prev, [postId]: { ...prev[postId], restore: true } }));
+  const handleToggleComments = async (postId: string) => {
+    if (expandedPost === postId) {
+      setExpandedPost(null);
+    } else {
+      setExpandedPost(postId);
+      if (!comments[postId]) {
+        await loadComments(postId);
+      }
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (window.confirm('Are you sure you want to delete this post? This will also delete all comments. This action cannot be undone.')) {
+      try {
+        await apiClient.deletePost(postId);
+        setPosts(posts.filter(p => p.id !== postId));
+        toast({
+          title: 'Post deleted',
+          description: 'The post and its comments have been removed from the feed',
+        });
+      } catch (error: any) {
+        console.error('Failed to delete post:', error);
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to delete post',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const handleDeleteComment = async (postId: string, commentId: string) => {
+    if (window.confirm('Are you sure you want to delete this comment?')) {
+      try {
+        await apiClient.deleteComment(postId, commentId);
+        setComments(prev => ({
+          ...prev,
+          [postId]: prev[postId]?.filter(c => c.id !== commentId) || []
+        }));
+        // Update comment count in posts
+        setPosts(posts.map(p => 
+          p.id === postId 
+            ? { ...p, comments_count: Math.max(0, p.comments_count - 1) }
+            : p
+        ));
+        toast({
+          title: 'Comment deleted',
+          description: 'The comment has been removed',
+        });
+      } catch (error: any) {
+        console.error('Failed to delete comment:', error);
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to delete comment',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const handleEditPost = (post: Post) => {
+    setEditingPost(post);
+    setEditContent(post.content);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPost || !editContent.trim()) return;
     
+    setIsSaving(true);
     try {
-      await feedService.restorePost(postId);
+      const updatedPost = await apiClient.updatePost(editingPost.id, {
+        content: editContent,
+      });
       
-      // Update local state optimistically
-      setPosts(prev => prev.map(post => 
-        post.id === postId ? { ...post, status: 'active' as PostStatus } : post
+      // Update the post in the list
+      setPosts(posts.map(p => 
+        p.id === editingPost.id 
+          ? { ...p, content: editContent }
+          : p
       ));
       
+      setEditingPost(null);
+      setEditContent('');
+      
       toast({
-        title: 'Post restored',
-        description: 'The post has been restored and is now visible',
+        title: 'Post updated',
+        description: 'The post has been successfully updated',
       });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to restore post';
+    } catch (error: any) {
+      console.error('Failed to update post:', error);
       toast({
-        title: 'Failed to restore post',
-        description: errorMessage,
+        title: 'Error',
+        description: error.message || 'Failed to update post',
         variant: 'destructive',
       });
     } finally {
-      setActionLoading(prev => ({ ...prev, [postId]: { ...prev[postId], restore: false } }));
+      setIsSaving(false);
     }
   };
 
-  // Handle pin/unpin post
-  const handleTogglePin = async (postId: number) => {
-    setActionLoading(prev => ({ ...prev, [postId]: { ...prev[postId], pin: true } }));
-    
-    try {
-      const response = await feedService.togglePinPost(postId);
-      
-      // Update local state with the new pin state
-      setPosts(prev => prev.map(post => 
-        post.id === postId ? { ...post, is_pinned: response.is_pinned } : post
-      ));
-      
-      toast({
-        title: response.is_pinned ? 'Post pinned' : 'Post unpinned',
-        description: response.is_pinned 
-          ? 'The post is now pinned to the top of the feed' 
-          : 'The post has been unpinned',
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update pin status';
-      toast({
-        title: 'Failed to update pin status',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setActionLoading(prev => ({ ...prev, [postId]: { ...prev[postId], pin: false } }));
-    }
-  };
-
-  // Get status badge variant and text
-  const getStatusBadge = (status: PostStatus, isPinned: boolean) => {
-    if (isPinned) {
-      return (
-        <Badge className="bg-amber-500 hover:bg-amber-600 text-white">
-          <Pin className="w-3 h-3 mr-1" />
-          Pinned
-        </Badge>
-      );
-    }
-    
-    switch (status) {
-      case 'active':
-        return (
-          <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 dark:bg-green-950">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Active
-          </Badge>
-        );
-      case 'hidden':
-        return (
-          <Badge variant="outline" className="text-yellow-600 border-yellow-300 bg-yellow-50 dark:bg-yellow-950">
-            <EyeOff className="w-3 h-3 mr-1" />
-            Hidden
-          </Badge>
-        );
-      case 'deleted':
-        return (
-          <Badge variant="outline" className="text-red-600 border-red-300 bg-red-50 dark:bg-red-950">
-            <XCircle className="w-3 h-3 mr-1" />
-            Deleted
-          </Badge>
-        );
-      default:
-        return null;
-    }
-  };
-
-  // Format date to human-readable string
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  // Loading skeleton
-  const PostSkeleton = () => (
-    <Card className="p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 space-y-3">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-4 w-20" />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-8 w-8" />
-          <Skeleton className="h-8 w-8" />
-        </div>
-      </div>
-    </Card>
+  const filteredPosts = posts.filter(post =>
+    post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    post.author.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Sort posts: pinned first, then by date
-  const sortedPosts = [...posts].sort((a, b) => {
-    if (a.is_pinned && !b.is_pinned) return -1;
-    if (!a.is_pinned && b.is_pinned) return 1;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleString();
+  };
 
   return (
     <div className="space-y-6">
@@ -283,49 +243,30 @@ const AdminFeedManager = () => {
               Monitor and moderate posts from your university alumni
             </p>
           </div>
-          <Badge variant="outline" className="text-lg px-4 py-2">
-            {totalPosts} Posts
-          </Badge>
-        </div>
-
-        {/* Search and Filter */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search posts by content or author..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Select 
-            value={statusFilter} 
-            onValueChange={(value: StatusFilter) => {
-              setStatusFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="hidden">Hidden</SelectItem>
-              <SelectItem value="deleted">Deleted</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="icon"
-            onClick={() => fetchPosts()}
+            onClick={loadPosts}
             disabled={isLoading}
-            title="Refresh"
+            title="Refresh posts"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
+          <Badge variant="outline" className="text-lg px-4 py-2">
+            {posts.length} Posts
+          </Badge>
+        </div>
+
+        {/* Search */}
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search posts by content or author..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
 
         {/* Info Alert */}
@@ -334,85 +275,98 @@ const AdminFeedManager = () => {
           <div className="text-sm">
             <p className="font-medium text-blue-700 dark:text-blue-400 mb-1">Admin Moderation</p>
             <p className="text-blue-600 dark:text-blue-300">
-              You can hide inappropriate posts, restore hidden posts, and pin important announcements.
-              Pinned posts appear at the top of the feed for all users.
+              You can edit or remove inappropriate posts and comments to maintain a professional environment.
             </p>
           </div>
         </div>
       </Card>
 
-      {/* Error State */}
-      {error && !isLoading && (
-        <Card className="p-8 text-center border-destructive">
-          <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Failed to load posts</h3>
-          <p className="text-muted-foreground mb-4">{error}</p>
-          <Button onClick={() => fetchPosts()}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Try Again
-          </Button>
-        </Card>
-      )}
-
       {/* Loading State */}
-      {isLoading && (
-        <div className="space-y-4">
-          <PostSkeleton />
-          <PostSkeleton />
-          <PostSkeleton />
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!isLoading && !error && posts.length === 0 && (
-        <Card className="p-8 text-center">
-          <Eye className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No posts found</h3>
-          <p className="text-muted-foreground">
-            {debouncedSearch || statusFilter !== 'all' 
-              ? 'Try adjusting your search or filter criteria' 
-              : 'No posts have been created yet'}
-          </p>
+      {isLoading ? (
+        <Card className="p-8">
+          <div className="flex flex-col items-center justify-center">
+            <div className="relative mb-4">
+              <div className="w-14 h-14 rounded-full border-4 border-primary/20 animate-pulse" />
+              <div className="w-14 h-14 rounded-full border-4 border-t-primary border-transparent animate-spin absolute inset-0" />
+              <FileText className="w-5 h-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+            </div>
+            <p className="text-sm text-muted-foreground animate-pulse">Loading posts...</p>
+            <div className="flex gap-1 mt-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
         </Card>
-      )}
-
-      {/* Posts List */}
-      {!isLoading && !error && posts.length > 0 && (
+      ) : (
+        /* Posts List */
         <div className="space-y-4">
-          {sortedPosts.map(post => {
-            const postActionLoading = actionLoading[post.id] || {};
-            const isAnyActionLoading = postActionLoading.hide || postActionLoading.restore || postActionLoading.pin;
-            
-            return (
-              <Card 
-                key={post.id} 
-                className={`p-6 transition-all ${
-                  post.status === 'hidden' ? 'opacity-75 border-yellow-200 dark:border-yellow-800' :
-                  post.status === 'deleted' ? 'opacity-60 border-red-200 dark:border-red-800' :
-                  post.is_pinned ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/30' : ''
-                }`}
-              >
+          {filteredPosts.length === 0 ? (
+            <Card className="p-10 text-center border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+              <div className="flex flex-col items-center justify-center">
+                <div className="relative mb-5">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                      <FileText className="w-7 h-7 text-primary/60" />
+                    </div>
+                  </div>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">No Posts Found</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  {searchQuery ? `No posts match "${searchQuery}". Try adjusting your search.` : 'No posts have been created yet.'}
+                </p>
+              </div>
+            </Card>
+          ) : (
+            filteredPosts.map(post => (
+              <Card key={post.id} className="p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className="font-semibold">{post.author_name}</h3>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(post.created_at)}
+                    <div className="flex items-center gap-3 mb-2">
+                      {post.author.avatar && (
+                        <img 
+                          src={post.author.avatar} 
+                          alt={post.author.name}
+                          className="w-10 h-10 rounded-full"
+                        />
+                      )}
+                      <div>
+                        <h3 className="font-semibold">{post.author.name}</h3>
+                        {post.author.title && (
+                          <p className="text-xs text-muted-foreground">
+                            {post.author.title}{post.author.company ? ` at ${post.author.company}` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {post.time || formatTime(post.created_at)}
                       </span>
-                      {getStatusBadge(post.status, post.is_pinned)}
-                      <Badge variant="secondary" className="text-xs">
-                        {post.university_name}
-                      </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-3 whitespace-pre-wrap">{post.content}</p>
+                    
+                    {post.tag && (
+                      <Badge variant="secondary" className="mb-2">
+                        {post.tag}
+                      </Badge>
+                    )}
+                    
+                    <p className="text-sm mb-3 whitespace-pre-wrap">{post.content}</p>
+                    
+                    {post.media_url && (
+                      <img 
+                        src={post.media_url} 
+                        alt="Post media" 
+                        className="max-w-md rounded-lg mb-3"
+                      />
+                    )}
+                    
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
-                        <ThumbsUp className="w-4 h-4" />
+                        <Heart className="w-4 h-4" />
                         {post.likes_count} likes
                       </span>
                       <button
-                        onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
-                        className="flex items-center gap-1 hover:text-primary transition-colors"
+                        onClick={() => handleToggleComments(post.id)}
+                        className="flex items-center gap-1 hover:text-primary"
                       >
                         <MessageCircle className="w-4 h-4" />
                         {post.comments_count} comments
@@ -420,154 +374,122 @@ const AdminFeedManager = () => {
                     </div>
                   </div>
                   
-                  {/* Action Buttons */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* Pin/Unpin Button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleTogglePin(post.id)}
-                      disabled={isAnyActionLoading || post.status !== 'active'}
-                      title={post.is_pinned ? 'Unpin post' : 'Pin post'}
-                      className={post.is_pinned 
-                        ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900'
-                        : 'text-muted-foreground hover:text-amber-600'}
-                    >
-                      {postActionLoading.pin ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : post.is_pinned ? (
-                        <PinOff className="w-4 h-4" />
-                      ) : (
-                        <Pin className="w-4 h-4" />
-                      )}
-                    </Button>
-
-                    {/* Hide/Restore Button */}
-                    {post.status === 'active' ? (
+                  <div className="flex gap-2">
+                    {post.can_edit && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleHidePost(post.id)}
-                        disabled={isAnyActionLoading}
-                        title="Hide post"
-                        className="text-muted-foreground hover:text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900"
+                        onClick={() => handleEditPost(post)}
+                        className="text-muted-foreground hover:text-primary"
+                        title="Edit post"
                       >
-                        {postActionLoading.hide ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <EyeOff className="w-4 h-4" />
-                        )}
+                        <Edit className="w-4 h-4" />
                       </Button>
-                    ) : (
+                    )}
+                    {post.can_delete && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleRestorePost(post.id)}
-                        disabled={isAnyActionLoading}
-                        title="Restore post"
-                        className="text-muted-foreground hover:text-green-600 hover:bg-green-100 dark:hover:bg-green-900"
+                        onClick={() => handleDeletePost(post.id)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Delete post"
                       >
-                        {postActionLoading.restore ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <RotateCcw className="w-4 h-4" />
-                        )}
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
                   </div>
                 </div>
 
-                {/* Expanded Comments Section */}
+                {/* Comments Section */}
                 {expandedPost === post.id && (
                   <div className="mt-4 pt-4 border-t border-border space-y-3">
-                    <h4 className="font-medium text-sm">Comments ({post.comments?.length || 0})</h4>
-                    {(!post.comments || post.comments.length === 0) ? (
+                    <h4 className="font-medium text-sm">Comments</h4>
+                    
+                    {loadingComments === post.id ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : !comments[post.id] || comments[post.id].length === 0 ? (
                       <p className="text-sm text-muted-foreground">No comments yet</p>
                     ) : (
-                      post.comments.map(comment => (
-                        <div 
-                          key={comment.id} 
-                          className={`flex items-start gap-4 p-3 rounded-lg ${
-                            comment.status === 'deleted' 
-                              ? 'bg-red-50/50 dark:bg-red-950/30 opacity-60' 
-                              : 'bg-muted/30'
-                          }`}
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm">{comment.author_name}</p>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDate(comment.created_at)}
-                              </span>
-                              {comment.status === 'deleted' && (
-                                <Badge variant="outline" className="text-xs text-red-600">
-                                  Deleted
-                                </Badge>
-                              )}
+                      comments[post.id].map(comment => (
+                        <div key={comment.id} className="flex items-start justify-between gap-4 bg-muted/30 p-3 rounded-lg">
+                          <div className="flex gap-2 flex-1">
+                            {comment.author.avatar && (
+                              <img 
+                                src={comment.author.avatar} 
+                                alt={comment.author.name}
+                                className="w-8 h-8 rounded-full"
+                              />
+                            )}
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{comment.author.name}</p>
+                              <p className="text-sm">{comment.content}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {comment.time || formatTime(comment.created_at)}
+                              </p>
                             </div>
-                            <p className="text-sm">{comment.content}</p>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteComment(post.id, comment.id)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+                            title="Delete comment"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
                       ))
                     )}
                   </div>
                 )}
               </Card>
-            );
-          })}
+            ))
+          )}
         </div>
       )}
 
-      {/* Pagination */}
-      {!isLoading && !error && totalPages > 1 && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages} ({totalPosts} total posts)
-            </p>
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-                {/* Show limited page numbers */}
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum: number;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  return (
-                    <PaginationItem key={pageNum}>
-                      <PaginationLink
-                        onClick={() => setCurrentPage(pageNum)}
-                        isActive={currentPage === pageNum}
-                        className="cursor-pointer"
-                      >
-                        {pageNum}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                })}
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+      {/* Edit Post Dialog */}
+      <Dialog open={!!editingPost} onOpenChange={(open) => !open && setEditingPost(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Post</DialogTitle>
+            <DialogDescription>
+              Make changes to this post. Click save when you're done.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="Post content..."
+              className="min-h-[150px]"
+            />
           </div>
-        </Card>
-      )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingPost(null)}
+              disabled={isSaving}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={isSaving || !editContent.trim()}
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

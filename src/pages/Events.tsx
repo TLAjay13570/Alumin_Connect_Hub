@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSidebar } from '@/contexts/SidebarContext';
-import { useAuth } from '@/contexts/AuthContext';
 import DesktopNav from '@/components/DesktopNav';
 import MobileNav from '@/components/MobileNav';
 import EventModal from '@/components/EventModal';
@@ -9,29 +8,12 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Plus, 
-  Search, 
-  Video, 
-  Settings, 
-  Edit, 
-  Trash2, 
-  Check, 
-  ExternalLink, 
-  Menu,
-  RefreshCw,
-  AlertCircle,
-  Loader2,
-  Clock,
-} from 'lucide-react';
-import { useEvents, Event, EventFormData } from '@/contexts/EventsContext';
+import { Calendar, MapPin, Users, Plus, Search, Video, Settings, Edit, Trash2, Check, ExternalLink, Menu, RefreshCw } from 'lucide-react';
+import { useEvents, Event } from '@/contexts/EventsContext';
 import { useToast } from '@/hooks/use-toast';
-import { eventService } from '@/services/eventService';
+import { LoadingState } from '@/components/ui/loading-state';
+import { ErrorState } from '@/components/ui/error-state';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,68 +22,33 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const Events = () => {
-  const { 
-    events, 
-    registeredEvents, 
-    isLoading, 
-    isCreating,
-    isRegistering,
-    error,
-    canManageEvents,
-    createEvent, 
-    updateEvent, 
-    deleteEvent, 
-    registerForEvent, 
-    unregisterFromEvent,
-    refreshEvents,
-    clearError,
-  } = useEvents();
-  const { isAuthenticated, user } = useAuth();
+  const { events, registeredEvents, loading: isLoading, error, createEvent, updateEvent, deleteEvent, registerForEvent, unregisterFromEvent, refreshEvents } = useEvents();
   const { isOpen: isSidebarOpen, toggleSidebar } = useSidebar();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  const [filter, setFilter] = useState<'all' | 'registered' | 'upcoming'>('all');
-  const [operatingEventId, setOperatingEventId] = useState<number | null>(null);
-
-  // Show error toast when error changes
-  useEffect(() => {
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error,
-        variant: 'destructive',
-      });
-      clearError();
-    }
-  }, [error, toast, clearError]);
+  const [filter, setFilter] = useState<'all' | 'registered'>('all');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = 
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.eventType.toLowerCase().includes(searchQuery.toLowerCase());
+      event.category.toLowerCase().includes(searchQuery.toLowerCase());
     
-    let matchesFilter = true;
-    if (filter === 'registered') {
-      matchesFilter = event.isRegistered;
-    } else if (filter === 'upcoming') {
-      matchesFilter = event.status === 'upcoming';
-    }
+    const matchesFilter = filter === 'all' || (filter === 'registered' && event.isRegistered);
     
     return matchesSearch && matchesFilter;
   });
 
-  const handleCreateEvent = async (formData: EventFormData) => {
-    const result = await createEvent(formData);
-    if (result) {
-      toast({
-        title: 'Event created!',
-        description: 'Your event has been created successfully',
-      });
+  const handleCreateEvent = async (eventData: Omit<Event, 'id' | 'attendees' | 'isRegistered' | 'organizer'>) => {
+    try {
+      await createEvent(eventData);
       setIsModalOpen(false);
+    } catch (err) {
+      // Error toast is handled in context
     }
   };
 
@@ -110,111 +57,51 @@ const Events = () => {
     setIsModalOpen(true);
   };
 
-  const handleUpdateEvent = async (formData: EventFormData) => {
+  const handleUpdateEvent = async (eventData: Omit<Event, 'id' | 'attendees' | 'isRegistered' | 'organizer'>) => {
     if (editingEvent) {
-      const result = await updateEvent(editingEvent.id, formData);
-      if (result) {
-        toast({
-          title: 'Event updated!',
-          description: 'Event details have been updated successfully',
-        });
+      try {
+        await updateEvent(editingEvent.id, eventData);
         setEditingEvent(null);
         setIsModalOpen(false);
+      } catch (err) {
+        // Error toast is handled in context
       }
     }
   };
 
-  const handleDeleteEvent = async (eventId: number, eventTitle: string) => {
+  const handleDeleteEvent = async (eventId: string, eventTitle: string) => {
     const confirmed = window.confirm(`Are you sure you want to delete "${eventTitle}"? This action cannot be undone.`);
     if (confirmed) {
-      setOperatingEventId(eventId);
-      const success = await deleteEvent(eventId);
-      if (success) {
-        toast({
-          title: 'Event deleted',
-          description: 'The event has been removed',
-        });
+      try {
+        await deleteEvent(eventId);
+      } catch (err) {
+        // Error toast is handled in context
       }
-      setOperatingEventId(null);
     }
   };
 
-  const handleRegister = async (eventId: number, eventTitle: string) => {
-    if (!isAuthenticated) {
-      toast({
-        title: 'Login required',
-        description: 'Please log in to register for events',
-        variant: 'destructive',
-      });
-      return;
+  const handleRegister = async (eventId: string, eventTitle: string) => {
+    try {
+      await registerForEvent(eventId);
+    } catch (err) {
+      // Error toast is handled in context
     }
-
-    setOperatingEventId(eventId);
-    const success = await registerForEvent(eventId);
-    if (success) {
-      toast({
-        title: 'Registered!',
-        description: `You're registered for ${eventTitle}`,
-      });
-    }
-    setOperatingEventId(null);
   };
 
-  const handleUnregister = async (eventId: number, eventTitle: string) => {
+  const handleUnregister = async (eventId: string, eventTitle: string) => {
     const confirmed = window.confirm(`Are you sure you want to unregister from "${eventTitle}"?`);
     if (confirmed) {
-      setOperatingEventId(eventId);
-      const success = await unregisterFromEvent(eventId);
-      if (success) {
-        toast({
-          title: 'Unregistered',
-          description: `You've been removed from ${eventTitle}`,
-        });
+      try {
+        await unregisterFromEvent(eventId);
+      } catch (err) {
+        // Error toast is handled in context
       }
-      setOperatingEventId(null);
     }
-  };
-
-  const handleRefresh = async () => {
-    await refreshEvents();
-    toast({
-      title: 'Refreshed',
-      description: 'Events list has been updated',
-    });
   };
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     e.currentTarget.src = 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&h=500&fit=crop';
   };
-
-  const getStatusBadge = (event: Event) => {
-    const statusInfo = eventService.getEventStatusInfo(event.status);
-    return (
-      <Badge 
-        variant="outline" 
-        className={`${statusInfo.bgColor} ${statusInfo.color} border-0`}
-      >
-        {statusInfo.label}
-      </Badge>
-    );
-  };
-
-  // Loading skeleton component
-  const EventSkeleton = () => (
-    <Card className="overflow-hidden">
-      <Skeleton className="w-full h-48" />
-      <div className="p-4 space-y-3">
-        <Skeleton className="h-6 w-3/4" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-1/2" />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-4 w-1/2" />
-        </div>
-        <Skeleton className="h-10 w-full" />
-      </div>
-    </Card>
-  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -237,40 +124,23 @@ const Events = () => {
               </Button>
               <div className="flex-1">
                 <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-1">Events</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {canManageEvents 
-                    ? "Manage and create events for your alumni network"
-                    : user?.university 
-                      ? `Events for ${user.university}`
-                      : "Discover and join alumni events"}
-                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Discover and join alumni events</p>
               </div>
             </div>
             <div className="flex gap-2 w-full sm:w-auto">
               <Button 
                 variant="outline" 
                 size="icon" 
-                onClick={handleRefresh}
+                onClick={refreshEvents}
                 disabled={isLoading}
-                className="h-9 w-9 sm:h-10 sm:w-10"
-                title="Refresh events"
+                className="h-9 w-9"
               >
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
-              {canManageEvents && (
-                <Button 
-                  className="gap-2 h-9 sm:h-10 text-sm flex-1 sm:flex-initial" 
-                  onClick={() => setIsModalOpen(true)}
-                  disabled={isCreating}
-                >
-                  {isCreating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-                  )}
-                  <span>Create Event</span>
-                </Button>
-              )}
+              <Button className="gap-2 h-9 sm:h-10 text-sm flex-1 sm:flex-none" onClick={() => setIsModalOpen(true)}>
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>Create Event</span>
+              </Button>
             </div>
           </div>
 
@@ -280,7 +150,7 @@ const Events = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground pointer-events-none" />
                 <Input 
-                  placeholder="Search events by title, description, location..." 
+                  placeholder="Search events..." 
                   className="pl-9 sm:pl-10 h-9 sm:h-11 text-sm sm:text-base"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -288,13 +158,10 @@ const Events = () => {
               </div>
             </Card>
 
-            <Tabs value={filter} onValueChange={(v) => setFilter(v as 'all' | 'registered' | 'upcoming')}>
-              <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+            <Tabs value={filter} onValueChange={(v) => setFilter(v as 'all' | 'registered')}>
+              <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
                 <TabsTrigger value="all" className="text-xs sm:text-sm">
                   All Events ({events.length})
-                </TabsTrigger>
-                <TabsTrigger value="upcoming" className="text-xs sm:text-sm">
-                  Upcoming ({events.filter(e => e.status === 'upcoming').length})
                 </TabsTrigger>
                 <TabsTrigger value="registered" className="text-xs sm:text-sm">
                   My Events ({registeredEvents.length})
@@ -303,94 +170,71 @@ const Events = () => {
             </Tabs>
           </div>
 
-          {/* Error State */}
-          {error && !isLoading && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error loading events</AlertTitle>
-              <AlertDescription className="flex items-center justify-between">
-                <span>{error}</span>
-                <Button variant="outline" size="sm" onClick={handleRefresh}>
-                  Try Again
-                </Button>
-              </AlertDescription>
-            </Alert>
+          {/* Loading State */}
+          {isLoading && events.length === 0 && (
+            <LoadingState message="Loading events..." />
           )}
 
-          {/* Loading State */}
-          {isLoading && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <EventSkeleton key={i} />
-              ))}
-            </div>
+          {/* Error State */}
+          {error && !isLoading && (
+            <ErrorState 
+              message={error} 
+              onRetry={refreshEvents}
+            />
           )}
 
           {/* Empty State */}
-          {!isLoading && filteredEvents.length === 0 && (
-            <Card className="p-12 text-center">
-              <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">No events found</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchQuery 
+          {!isLoading && !error && filteredEvents.length === 0 && (
+            <EmptyState 
+              icon={Calendar}
+              title="No events found"
+              description={
+                searchQuery 
                   ? "Try adjusting your search terms" 
                   : filter === 'registered'
                     ? "You haven't registered for any events yet"
-                    : filter === 'upcoming'
-                      ? "No upcoming events at the moment"
-                      : canManageEvents
-                        ? "Be the first to create an event!"
-                        : "No events available for your university yet"}
-              </p>
-              {!searchQuery && filter === 'all' && canManageEvents && (
-                <Button onClick={() => setIsModalOpen(true)} className="gap-2">
-                  <Plus className="w-5 h-5" />
-                  Create Your First Event
-                </Button>
-              )}
-            </Card>
+                    : "Be the first to create an event!"
+              }
+              action={!searchQuery && filter === 'all' ? {
+                label: 'Create Your First Event',
+                onClick: () => setIsModalOpen(true)
+              } : undefined}
+            />
           )}
 
           {/* Events Grid */}
           {!isLoading && filteredEvents.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
               {filteredEvents.map((event) => {
-                const isOperating = operatingEventId === event.id;
+                const isOwner = event.organizer === 'You';
+                const isActionLoading = actionLoading === event.id;
                 
                 return (
                   <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-all duration-200 flex flex-col">
                     {/* Event Image */}
                     <div className="relative bg-muted">
                       <img
-                        src={event.imageUrl}
+                        src={event.image}
                         alt={event.title}
                         onError={handleImageError}
                         className="w-full h-48 object-cover"
                         loading="lazy"
                       />
-                      <div className="absolute top-3 left-3 flex gap-2">
-                        {event.isVirtual && (
-                          <Badge className="gap-1 bg-accent shadow-md">
-                            <Video className="w-3 h-3" />
-                            Virtual
-                          </Badge>
-                        )}
-                        {getStatusBadge(event)}
-                      </div>
-                      {canManageEvents && (
+                      {event.isVirtual && (
+                        <Badge className="absolute top-3 left-3 gap-1 bg-accent shadow-md">
+                          <Video className="w-3 h-3" />
+                          Virtual
+                        </Badge>
+                      )}
+                      {isOwner && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button 
                               variant="secondary" 
                               size="icon" 
                               className="absolute top-3 right-3 h-8 w-8 shadow-md"
-                              disabled={isOperating}
                             >
-                              {isOperating ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Settings className="w-4 h-4" />
-                              )}
+                              <Settings className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
@@ -414,8 +258,8 @@ const Events = () => {
                     <div className="p-4 sm:p-5 space-y-3 flex-1 flex flex-col">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-semibold text-base sm:text-lg line-clamp-2 flex-1">{event.title}</h3>
-                        <Badge variant="secondary" className="text-xs flex-shrink-0 capitalize">
-                          {event.eventType.replace('_', ' ')}
+                        <Badge variant="secondary" className="text-xs flex-shrink-0">
+                          {event.category}
                         </Badge>
                       </div>
                       
@@ -434,28 +278,17 @@ const Events = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 flex-shrink-0" />
-                          <span>
-                            {event.attendeeCount} attending
-                            {event.maxAttendees && ` / ${event.maxAttendees} max`}
-                          </span>
+                          <span>{event.attendees} attending</span>
                         </div>
-                        {event.registrationDeadline && (
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 flex-shrink-0" />
-                            <span className="text-xs">
-                              Register by {event.registrationDeadline.toLocaleDateString()}
-                            </span>
-                          </div>
-                        )}
                       </div>
 
                       {/* Meeting Link for Virtual Events */}
-                      {event.isVirtual && event.venue && event.isRegistered && (
+                      {event.isVirtual && event.meetingLink && event.isRegistered && (
                         <Button
                           variant="outline"
                           size="sm"
                           className="w-full gap-2"
-                          onClick={() => window.open(event.venue, '_blank')}
+                          onClick={() => window.open(event.meetingLink, '_blank')}
                         >
                           <ExternalLink className="w-4 h-4" />
                           Join Meeting
@@ -463,67 +296,35 @@ const Events = () => {
                       )}
 
                       {/* Register/Unregister Button */}
-                      {event.status === 'upcoming' && (
-                        <>
-                          {event.isRegistered ? (
-                            <div className="flex gap-2">
-                              <Button className="flex-1 gap-2" variant="outline" disabled>
-                                <Check className="w-4 h-4" />
-                                Registered
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleUnregister(event.id, event.title)}
-                                className="text-destructive hover:text-destructive"
-                                disabled={isOperating || isRegistering}
-                              >
-                                {isOperating ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  'Leave'
-                                )}
-                              </Button>
-                            </div>
-                          ) : event.canRegister ? (
-                            <Button 
-                              className="w-full gap-2"
-                              onClick={() => handleRegister(event.id, event.title)}
-                              disabled={isOperating || isRegistering}
-                            >
-                              {isOperating ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <Plus className="w-4 h-4" />
-                                  Register
-                                </>
-                              )}
-                            </Button>
+                      {event.isRegistered ? (
+                        <div className="flex gap-2">
+                          <Button className="flex-1 gap-2" variant="outline" disabled={isActionLoading}>
+                            <Check className="w-4 h-4" />
+                            Registered
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleUnregister(event.id, event.title)}
+                            className="text-destructive hover:text-destructive"
+                            disabled={isActionLoading}
+                          >
+                            Leave
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button 
+                          className="w-full gap-2"
+                          onClick={() => handleRegister(event.id, event.title)}
+                          disabled={isActionLoading}
+                        >
+                          {isActionLoading ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
                           ) : (
-                            <Button className="w-full gap-2" variant="secondary" disabled>
-                              Registration Closed
-                            </Button>
+                            <Plus className="w-4 h-4" />
                           )}
-                        </>
-                      )}
-
-                      {event.status === 'ongoing' && (
-                        <Badge className="w-full justify-center py-2 bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/10">
-                          Happening Now
-                        </Badge>
-                      )}
-
-                      {event.status === 'completed' && (
-                        <Badge className="w-full justify-center py-2" variant="secondary">
-                          Event Completed
-                        </Badge>
-                      )}
-
-                      {event.status === 'cancelled' && (
-                        <Badge className="w-full justify-center py-2 bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/10">
-                          Event Cancelled
-                        </Badge>
+                          Register
+                        </Button>
                       )}
                     </div>
                   </Card>
@@ -543,7 +344,6 @@ const Events = () => {
         }}
         onSubmit={editingEvent ? handleUpdateEvent : handleCreateEvent}
         editEvent={editingEvent}
-        isSubmitting={isCreating}
       />
     </div>
   );

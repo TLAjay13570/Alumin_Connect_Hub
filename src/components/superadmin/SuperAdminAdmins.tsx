@@ -169,9 +169,27 @@ const SuperAdminAdmins = () => {
         ))}
 
         {admins.length === 0 && (
-          <Card className="p-8 text-center col-span-full">
-            <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No admins assigned yet</p>
+          <Card className="p-10 text-center col-span-full border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative mb-6">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                    <Shield className="w-7 h-7 text-primary/60" />
+                  </div>
+                </div>
+                <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
+                  <Plus className="w-4 h-4 text-primary" />
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No Admins Yet</h3>
+              <p className="text-muted-foreground mb-6 max-w-md text-sm">
+                Add university administrators to help manage alumni platforms. Each admin can manage their assigned university.
+              </p>
+              <Button onClick={() => setIsModalOpen(true)} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Add First Admin
+              </Button>
+            </div>
           </Card>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { UserPlus, Upload, Mail, AlertCircle, CheckCircle, Download, Search, FileDown, Shield, GraduationCap, Users, Filter, X, RefreshCw, Loader2 } from 'lucide-react';
+import { UserPlus, Upload, Mail, AlertCircle, CheckCircle, Download, Search, FileDown, Shield, GraduationCap, Users, Filter, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
-import { Skeleton } from '@/components/ui/skeleton';
-import { userService, ApiUser } from '@/services/userService';
-import { UserRole } from '@/types/auth';
+import { apiClient } from '@/lib/api';
 
 interface AlumniUser {
   id: string;
@@ -38,49 +36,31 @@ interface AllUser {
   location?: string;
   graduationYear?: string;
   major?: string;
-  userType: 'admin' | 'mentor' | 'alumni' | 'superadmin' | 'student';
+  userType: 'admin' | 'mentor' | 'alumni';
   isMentor?: boolean;
-  isActive?: boolean;
-  isVerified?: boolean;
-  role?: UserRole;
 }
 
-// Map API role to display user type
-function mapRoleToUserType(role: UserRole): AllUser['userType'] {
-  switch (role) {
-    case 'SUPER_ADMIN':
-      return 'superadmin';
-    case 'UNIVERSITY_ADMIN':
-      return 'admin';
-    case 'STUDENT':
-      return 'student';
-    case 'ALUMNI':
-    default:
-      return 'alumni';
+// Generate a random password
+const generatePassword = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let password = '';
+  for (let i = 0; i < 10; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-}
-
-// Map API user to AllUser for display
-function mapApiUserToAllUser(apiUser: ApiUser): AllUser {
-  return {
-    id: String(apiUser.id),
-    name: apiUser.full_name,
-    email: apiUser.email,
-    userType: mapRoleToUserType(apiUser.role),
-    isActive: apiUser.is_active,
-    isVerified: apiUser.is_verified,
-    role: apiUser.role,
-  };
-}
+  return password;
+};
 
 const AdminUserManagement = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [bulkData, setBulkData] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // All Users tab state
   const [allUsers, setAllUsers] = useState<AllUser[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [filters, setFilters] = useState({
@@ -88,15 +68,10 @@ const AdminUserManagement = () => {
     email: '',
     phone: '',
     location: '',
-    userType: 'all' as 'all' | 'admin' | 'mentor' | 'alumni' | 'superadmin' | 'student',
+    userType: 'all' as 'all' | 'admin' | 'mentor' | 'alumni',
   });
   const [tempFilters, setTempFilters] = useState(filters);
   const itemsPerPage = 10;
-  
-  // Loading and error states for API
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Single user form
   const [newUser, setNewUser] = useState({
@@ -117,36 +92,50 @@ const AdminUserManagement = () => {
       return;
     }
 
-    // Create user object
-    const alumniUser: AlumniUser = {
-      id: `user_${Date.now()}`,
-      ...newUser,
-      universityId: user?.universityId || '',
-    };
+    setIsSubmitting(true);
+    
+    try {
+      // Generate a random password for the new user
+      const password = generatePassword();
+      
+      // Call backend API to create user - this will also send welcome email
+      await apiClient.createAdminUser({
+        name: newUser.name,
+        email: newUser.email,
+        password: password,
+        graduation_year: newUser.graduationYear ? parseInt(newUser.graduationYear) : undefined,
+        major: newUser.major || undefined,
+      });
 
-    // Store in localStorage
-    const existingUsers = JSON.parse(localStorage.getItem(`alumni_users_${user?.universityId}`) || '[]');
-    existingUsers.push(alumniUser);
-    localStorage.setItem(`alumni_users_${user?.universityId}`, JSON.stringify(existingUsers));
+      toast({
+        title: 'User added successfully!',
+        description: `Welcome email with login credentials sent to ${newUser.email}`,
+      });
 
-    // Simulate sending credentials email
-    toast({
-      title: 'User added successfully!',
-      description: `Credentials sent to ${newUser.email}`,
-    });
-
-    // Reset form
-    setNewUser({
-      name: '',
-      email: '',
-      graduationYear: '',
-      major: '',
-      isMentor: false,
-    });
-    setIsAddDialogOpen(false);
+      // Reset form and close dialog
+      setNewUser({
+        name: '',
+        email: '',
+        graduationYear: '',
+        major: '',
+        isMentor: false,
+      });
+      setIsAddDialogOpen(false);
+      
+      // Refresh the user list
+      loadAllUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Failed to add user',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleBulkUpload = () => {
+  const handleBulkUpload = async () => {
     if (!bulkData.trim()) {
       toast({
         title: 'No data provided',
@@ -156,6 +145,8 @@ const AdminUserManagement = () => {
       return;
     }
 
+    setIsSubmitting(true);
+    
     try {
       // Parse CSV (simple implementation)
       const lines = bulkData.trim().split('\n');
@@ -167,13 +158,21 @@ const AdminUserManagement = () => {
       if (!hasRequiredHeaders) {
         toast({
           title: 'Invalid CSV format',
-          description: 'CSV must include: name, email (optional: graduationYear, major, isMentor)',
+          description: 'CSV must include: name, email (optional: graduationYear, major)',
           variant: 'destructive',
         });
+        setIsSubmitting(false);
         return;
       }
 
-      const users: AlumniUser[] = [];
+      const usersToImport: Array<{
+        name: string;
+        email: string;
+        password: string;
+        graduation_year?: number;
+        major?: string;
+      }> = [];
+      
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
         if (values.length === 0 || !values[0]) continue;
@@ -183,34 +182,50 @@ const AdminUserManagement = () => {
           userData[header] = values[index] || '';
         });
 
-        users.push({
-          id: `user_${Date.now()}_${i}`,
+        usersToImport.push({
           name: userData.name,
           email: userData.email,
-          graduationYear: userData.graduationyear || userData.year || '',
-          major: userData.major || '',
-          isMentor: userData.ismentor === 'true' || userData.ismentor === '1',
-          universityId: user?.universityId || '',
+          password: generatePassword(), // Generate unique password for each user
+          graduation_year: userData.graduationyear || userData.year ? parseInt(userData.graduationyear || userData.year) : undefined,
+          major: userData.major || undefined,
         });
       }
 
-      // Store users
-      const existingUsers = JSON.parse(localStorage.getItem(`alumni_users_${user?.universityId}`) || '[]');
-      const updatedUsers = [...existingUsers, ...users];
-      localStorage.setItem(`alumni_users_${user?.universityId}`, JSON.stringify(updatedUsers));
+      if (usersToImport.length === 0) {
+        toast({
+          title: 'No valid users found',
+          description: 'Please check your CSV data',
+          variant: 'destructive',
+        });
+        setIsSubmitting(false);
+        return;
+      }
 
-      toast({
-        title: 'Bulk upload successful!',
-        description: `Added ${users.length} users. Credentials sent to their emails.`,
-      });
+      // Call backend API for bulk import
+      const result = await apiClient.bulkImportUsers(usersToImport);
 
-      setBulkData('');
-    } catch (error) {
+      if (result.success_count > 0) {
+        toast({
+          title: 'Bulk upload successful!',
+          description: `Added ${result.success_count} users. Welcome emails sent with credentials.${result.failed_count > 0 ? ` ${result.failed_count} failed.` : ''}`,
+        });
+        setBulkData('');
+        loadAllUsers(); // Refresh the list
+      } else {
+        toast({
+          title: 'Upload failed',
+          description: result.errors.join(', ') || 'All users failed to import',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
       toast({
         title: 'Upload failed',
-        description: 'Please check your CSV format and try again',
+        description: error.message || 'Please check your CSV format and try again',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -225,54 +240,48 @@ const AdminUserManagement = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  // Load all users from API
-  const loadAllUsers = useCallback(async (showRefreshIndicator = false) => {
-    if (showRefreshIndicator) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
+  // Load all users for the university
+  useEffect(() => {
+    loadAllUsers();
+  }, [user?.universityId, currentPage]);
 
+  const loadAllUsers = async () => {
+    if (!user?.universityId) return;
+
+    setIsLoading(true);
+    
     try {
-      const apiUsers = await userService.listUsers({ skip: 0, limit: 100 });
-      
-      // Filter users based on current admin's university if not superadmin
-      const filteredApiUsers = user?.role === 'superadmin' 
-        ? apiUsers 
-        : apiUsers.filter(u => u.university_id === (user?.universityId ? Number(user.universityId) : null));
-      
-      const mappedUsers = filteredApiUsers.map(mapApiUserToAllUser);
-      setAllUsers(mappedUsers);
-      
-      if (showRefreshIndicator) {
-        toast({
-          title: 'Users refreshed',
-          description: `Loaded ${mappedUsers.length} users`,
-        });
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load users';
-      setError(errorMessage);
+      // Call backend API to get users
+      const response = await apiClient.getAdminUsers({
+        page: currentPage,
+        page_size: itemsPerPage,
+        search: filters.name || filters.email || undefined,
+      });
+
+      const users: AllUser[] = response.users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: '', // Profile data if available
+        location: '', // Profile data if available
+        graduationYear: u.graduation_year?.toString() || '',
+        major: u.major || '',
+        userType: u.is_mentor ? 'mentor' : 'alumni',
+        isMentor: u.is_mentor,
+      }));
+
+      setAllUsers(users);
+      setTotalUsers(response.total);
+    } catch (error: any) {
+      console.error('Failed to load users:', error);
       toast({
-        title: 'Error loading users',
-        description: errorMessage,
+        title: 'Failed to load users',
+        description: error.message || 'Please try again',
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
-  }, [user?.universityId, user?.role, toast]);
-
-  // Load users on mount and when universityId changes
-  useEffect(() => {
-    loadAllUsers();
-  }, [loadAllUsers]);
-
-  // Handle manual refresh
-  const handleRefresh = () => {
-    loadAllUsers(true);
   };
 
   // Filter users
@@ -288,13 +297,9 @@ const AdminUserManagement = () => {
     });
   }, [allUsers, filters]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const paginatedUsers = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    const end = start + itemsPerPage;
-    return filteredUsers.slice(start, end);
-  }, [filteredUsers, currentPage, itemsPerPage]);
+  // Pagination - use API pagination
+  const totalPages = Math.ceil(totalUsers / itemsPerPage);
+  const paginatedUsers = filteredUsers; // Already paginated from API
 
   // CSV Export
   const exportToCSV = () => {
@@ -353,54 +358,11 @@ const AdminUserManagement = () => {
       email: '',
       phone: '',
       location: '',
-      userType: 'all' as 'all' | 'admin' | 'mentor' | 'alumni' | 'superadmin' | 'student',
+      userType: 'all' as const,
     };
     setTempFilters(emptyFilters);
     setFilters(emptyFilters);
     setCurrentPage(1);
-  };
-
-  // Get badge variant for user type
-  const getUserTypeBadge = (userType: AllUser['userType'], isActive?: boolean) => {
-    const activeClass = isActive === false ? 'opacity-50' : '';
-    switch (userType) {
-      case 'superadmin':
-        return (
-          <Badge className={`bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 flex items-center gap-1 w-fit ${activeClass}`}>
-            <Shield className="w-3 h-3" />
-            Super Admin
-          </Badge>
-        );
-      case 'admin':
-        return (
-          <Badge variant="default" className={`flex items-center gap-1 w-fit ${activeClass}`}>
-            <Shield className="w-3 h-3" />
-            Admin
-          </Badge>
-        );
-      case 'mentor':
-        return (
-          <Badge variant="secondary" className={`flex items-center gap-1 w-fit ${activeClass}`}>
-            <GraduationCap className="w-3 h-3" />
-            Mentor
-          </Badge>
-        );
-      case 'student':
-        return (
-          <Badge variant="outline" className={`flex items-center gap-1 w-fit ${activeClass}`}>
-            <GraduationCap className="w-3 h-3" />
-            Student
-          </Badge>
-        );
-      case 'alumni':
-      default:
-        return (
-          <Badge variant="outline" className={`flex items-center gap-1 w-fit ${activeClass}`}>
-            <Users className="w-3 h-3" />
-            Alumni
-          </Badge>
-        );
-    }
   };
 
   const getActiveFilterCount = () => {
@@ -494,8 +456,15 @@ const AdminUserManagement = () => {
                     Login credentials will be automatically sent to the provided email address.
                   </p>
                 </div>
-                <Button onClick={handleAddSingleUser} className="w-full">
-                  Add Alumni
+                <Button onClick={handleAddSingleUser} className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating User...
+                    </>
+                  ) : (
+                    'Add Alumni'
+                  )}
                 </Button>
               </div>
             </DialogContent>
@@ -580,10 +549,9 @@ const AdminUserManagement = () => {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all">All Types</SelectItem>
-                                <SelectItem value="superadmin">Super Admin</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="mentor">Mentor</SelectItem>
                                 <SelectItem value="alumni">Alumni</SelectItem>
-                                <SelectItem value="student">Student</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -614,18 +582,9 @@ const AdminUserManagement = () => {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-sm text-muted-foreground">
-                    {isLoading ? 'Loading...' : `Showing ${paginatedUsers.length} of ${filteredUsers.length} users`}
+                    Showing {paginatedUsers.length} of {totalUsers} users
                   </div>
-                  <Button 
-                    onClick={handleRefresh} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={isRefreshing || isLoading}
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
-                  <Button onClick={exportToCSV} variant="outline" size="sm" disabled={isLoading}>
+                  <Button onClick={exportToCSV} variant="outline" size="sm">
                     <FileDown className="w-4 h-4 mr-2" />
                     Export CSV
                   </Button>
@@ -650,67 +609,53 @@ const AdminUserManagement = () => {
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
-                      // Loading skeleton rows
-                      Array.from({ length: 5 }).map((_, index) => (
-                        <TableRow key={`skeleton-${index}`}>
-                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                          <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                        </TableRow>
-                      ))
-                    ) : error ? (
-                      // Error state
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8">
-                          <div className="flex flex-col items-center gap-3">
-                            <AlertCircle className="w-10 h-10 text-destructive" />
-                            <div className="text-destructive font-medium">{error}</div>
-                            <Button onClick={handleRefresh} variant="outline" size="sm">
-                              <RefreshCw className="w-4 h-4 mr-2" />
-                              Try Again
-                            </Button>
+                          <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Loading users...
                           </div>
                         </TableCell>
                       </TableRow>
                     ) : paginatedUsers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                          <div className="flex flex-col items-center gap-2">
-                            <Users className="w-10 h-10 opacity-50" />
-                            <p>No users found</p>
-                            {Object.values(filters).some(v => v !== '' && v !== 'all') && (
-                              <Button onClick={clearFilters} variant="outline" size="sm">
-                                Clear Filters
-                              </Button>
-                            )}
+                        <TableCell colSpan={7} className="py-12">
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-4">
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                                <Search className="w-5 h-5 text-primary/60" />
+                              </div>
+                            </div>
+                            <h4 className="font-medium mb-1">No Users Found</h4>
+                            <p className="text-sm text-muted-foreground max-w-sm text-center">
+                              {getActiveFilterCount() > 0 ? 'No users match the current filters. Try adjusting your search criteria.' : 'No users found. Add some alumni to get started.'}
+                            </p>
                           </div>
                         </TableCell>
                       </TableRow>
                     ) : (
                       paginatedUsers.map((u) => (
-                        <TableRow key={u.id} className={u.isActive === false ? 'opacity-60' : ''}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {u.name}
-                              {u.isVerified && (
-                                <CheckCircle className="w-4 h-4 text-green-500" title="Verified" />
-                              )}
-                              {u.isActive === false && (
-                                <Badge variant="outline" className="text-xs bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">
-                                  Inactive
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
+                        <TableRow key={u.id}>
+                          <TableCell className="font-medium">{u.name}</TableCell>
                           <TableCell>{u.email}</TableCell>
                           <TableCell>{u.phone || '-'}</TableCell>
                           <TableCell>{u.location || '-'}</TableCell>
                           <TableCell>
-                            {getUserTypeBadge(u.userType, u.isActive)}
+                            <Badge
+                              variant={
+                                u.userType === 'admin'
+                                  ? 'default'
+                                  : u.userType === 'mentor'
+                                  ? 'secondary'
+                                  : 'outline'
+                              }
+                              className="flex items-center gap-1 w-fit"
+                            >
+                              {u.userType === 'admin' && <Shield className="w-3 h-3" />}
+                              {u.userType === 'mentor' && <GraduationCap className="w-3 h-3" />}
+                              {u.userType === 'alumni' && <Users className="w-3 h-3" />}
+                              {u.userType.charAt(0).toUpperCase() + u.userType.slice(1)}
+                            </Badge>
                           </TableCell>
                           <TableCell>{u.graduationYear || '-'}</TableCell>
                           <TableCell>{u.major || '-'}</TableCell>
@@ -772,9 +717,18 @@ const AdminUserManagement = () => {
                 className="min-h-[200px] font-mono text-sm"
               />
             </div>
-            <Button onClick={handleBulkUpload} className="w-full">
-              <Upload className="w-4 h-4 mr-2" />
-              Upload Alumni
+            <Button onClick={handleBulkUpload} className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Alumni
+                </>
+              )}
             </Button>
           </TabsContent>
 
@@ -832,4 +786,5 @@ Bob Johnson,bob@example.com,2021,Business,false`}
 };
 
 export default AdminUserManagement;
+
 

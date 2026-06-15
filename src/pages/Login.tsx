@@ -6,16 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { GraduationCap, Shield, Crown, Loader2, AlertCircle } from 'lucide-react';
+import { GraduationCap, Shield, Crown, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUniversityBranding } from '@/hooks/use-university-branding';
-import { ApiClientError } from '@/lib/api';
 
 const Login = () => {
-  const [emailOrUsername, setEmailOrUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -25,21 +23,22 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
-
-    try {
-      await login(emailOrUsername, password);
-      
-      // Get stored user to determine redirect
-      const storedUser = JSON.parse(localStorage.getItem('alumni_user') || '{}');
-      
+    
+    if (!email || !password) {
       toast({
-        title: 'Welcome back!',
-        description: `Logged in as ${storedUser.name || storedUser.username || 'User'}`,
+        title: 'Missing credentials',
+        description: 'Please enter both email and password',
+        variant: 'destructive'
       });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await login(email, password);
       
-      // Redirect based on role
+      // Check user role and redirect accordingly
+      const storedUser = JSON.parse(localStorage.getItem('alumni_user') || '{}');
       if (storedUser.role === 'superadmin') {
         navigate('/superadmin');
       } else if (storedUser.role === 'admin') {
@@ -53,31 +52,16 @@ const Login = () => {
           navigate('/dashboard');
         }
       }
-    } catch (err) {
-      let errorMessage = 'Login failed. Please check your credentials and try again.';
       
-      if (err instanceof ApiClientError) {
-        errorMessage = err.message;
-        
-        // Specific error handling
-        if (err.status === 401) {
-          errorMessage = 'Invalid username/email or password';
-        } else if (err.status === 403) {
-          errorMessage = 'Your account has been deactivated. Please contact support.';
-        } else if (err.status >= 500) {
-          errorMessage = 'Server error. Please try again later.';
-        }
-      } else if (err instanceof Error) {
-        // Network errors
-        if (err.message.includes('fetch') || err.message.includes('network')) {
-          errorMessage = 'Unable to connect to server. Please check your internet connection.';
-        }
-      }
-      
-      setError(errorMessage);
+      toast({
+        title: 'Welcome back!',
+        description: `Signed in as ${storedUser.name}`,
+      });
+    } catch (error: any) {
+      const message = error?.detail || 'Please check your credentials and try again';
       toast({ 
         title: 'Login failed', 
-        description: errorMessage,
+        description: message,
         variant: 'destructive' 
       });
     } finally {
@@ -85,13 +69,12 @@ const Login = () => {
     }
   };
 
-  const fillCredentials = (email: string, pwd: string) => {
-    setEmailOrUsername(email);
-    setPassword(pwd);
-    setError(null);
+  const fillCredentials = (email: string, password: string) => {
+    setEmail(email);
+    setPassword(password);
   };
 
-  const isButtonDisabled = isSubmitting || isLoading || !emailOrUsername || !password;
+  const isDisabled = isSubmitting || isLoading;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-secondary/5 flex items-center justify-center p-4">
@@ -107,30 +90,18 @@ const Login = () => {
           </div>
 
           <div className="bg-card rounded-2xl p-6 sm:p-8 shadow-lg border border-border/50">
-            {/* Error Alert */}
-            {error && (
-              <div className="mb-5 p-4 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="emailOrUsername" className="text-base font-medium">Email or Username</Label>
+                <Label htmlFor="email" className="text-base font-medium">Email</Label>
                 <Input
-                  id="emailOrUsername"
-                  type="text"
-                  placeholder="you@university.edu or username"
-                  value={emailOrUsername}
-                  onChange={(e) => {
-                    setEmailOrUsername(e.target.value);
-                    setError(null);
-                  }}
+                  id="email"
+                  type="email"
+                  placeholder="you@university.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="h-11"
                   required
-                  disabled={isSubmitting}
-                  autoComplete="username"
+                  disabled={isDisabled}
                 />
               </div>
 
@@ -141,25 +112,21 @@ const Login = () => {
                   type="password"
                   placeholder="Enter your password"
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError(null);
-                  }}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="h-11"
                   required
-                  disabled={isSubmitting}
-                  autoComplete="current-password"
+                  disabled={isDisabled}
                 />
               </div>
 
               <Button 
                 type="submit" 
                 className="w-full h-11 text-base font-medium"
-                disabled={isButtonDisabled}
+                disabled={isDisabled}
               >
-                {isSubmitting ? (
+                {isDisabled ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Signing in...
                   </>
                 ) : (
@@ -168,95 +135,132 @@ const Login = () => {
               </Button>
             </form>
 
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
-              <Link to="/forgot-password" className="text-primary hover:underline font-medium">
-                Forgot your password?
-              </Link>
-              <Link to="/register" className="text-muted-foreground hover:text-primary transition-colors">
-                Don't have an account? <span className="font-medium text-primary">Sign up</span>
-              </Link>
-            </div>
+          <div className="mt-6 text-center text-sm">
+            <Link to="/forgot-password" className="text-primary hover:underline font-medium">
+              Forgot your password?
+            </Link>
+          </div>
           </div>
         </div>
 
-        {/* Credentials Sidebar - For demo purposes */}
-        <div className="space-y-4 max-h-[90vh] overflow-y-auto">
+        {/* Credentials Sidebar - Actual DB Users */}
+        <div className="space-y-4 max-h-[90vh] overflow-y-auto pr-2">
+          <div className="text-center mb-2">
+            <Badge variant="outline" className="text-xs">All passwords: password123</Badge>
+          </div>
+          
           {/* Super Admin Credentials */}
-          <Card className="p-6 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/20">
-            <div className="flex items-center gap-2 mb-4">
-              <Crown className="w-5 h-5 text-primary" />
-              <h3 className="font-bold text-lg">Super Admin</h3>
-              <Badge variant="secondary" className="text-xs">Master</Badge>
+          <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+            <div className="flex items-center gap-2 mb-3">
+              <Crown className="w-5 h-5 text-purple-500" />
+              <h3 className="font-bold text-base">Super Admin</h3>
             </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Full system control - All universities
-            </p>
             
-            <Card 
-              className="p-4 hover:shadow-md transition-all cursor-pointer" 
-              onClick={() => fillCredentials('superadmin', 'superadmin123')}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-semibold text-sm">System Administrator</h4>
-                <Badge variant="secondary" className="text-[10px]">Super</Badge>
+            <Card className="p-3 hover:shadow-md transition-all cursor-pointer hover:border-purple-400" onClick={() => fillCredentials('superadmin@alumni.connect', 'password123')}>
+              <div className="flex items-center justify-between mb-1">
+                <h4 className="font-semibold text-sm">Super Administrator</h4>
+                <Badge className="bg-purple-500 text-white text-[10px]">Super</Badge>
               </div>
-              <p className="text-xs text-muted-foreground mb-2">superadmin</p>
-              <p className="text-xs font-mono bg-muted px-2 py-1 rounded">superadmin123</p>
+              <p className="text-xs font-mono bg-muted px-2 py-1 rounded">superadmin@alumni.connect</p>
             </Card>
           </Card>
 
           {/* Admin Credentials */}
-          <Card className="p-6 bg-gradient-to-br from-red-500/10 to-orange-500/10 border-red-500/20">
-            <div className="flex items-center gap-2 mb-4">
+          <Card className="p-4 bg-gradient-to-br from-red-500/10 to-orange-500/10 border-red-500/20">
+            <div className="flex items-center gap-2 mb-3">
               <Shield className="w-5 h-5 text-red-500" />
-              <h3 className="font-bold text-lg">Admin Access</h3>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              University management access
-            </p>
-            
-            <div className="space-y-3">
-              <Card 
-                className="p-4 hover:shadow-md transition-all cursor-pointer bg-blue-500/5 border-blue-500/20" 
-                onClick={() => fillCredentials('tech_admin', 'tech123')}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-sm">Tech University Admin</h4>
-                  <Badge variant="destructive" className="text-xs">Admin</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mb-2">tech_admin</p>
-                <p className="text-xs font-mono bg-muted px-2 py-1 rounded">tech123</p>
-              </Card>
-            </div>
-          </Card>
-
-          {/* Alumni Credentials */}
-          <Card className="p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
-            <div className="flex items-center gap-2 mb-4">
-              <GraduationCap className="w-5 h-5 text-green-500" />
-              <h3 className="font-bold text-lg">Alumni Access</h3>
+              <h3 className="font-bold text-base">University Admins</h3>
             </div>
             
             <div className="space-y-2">
-              <Card 
-                className="p-3 hover:shadow-md transition-all cursor-pointer" 
-                onClick={() => fillCredentials('alumni_john', 'alumni123')}
-              >
+              <Card className="p-3 hover:shadow-md transition-all cursor-pointer bg-[#A31F34]/5 border-[#A31F34]/20 hover:border-[#A31F34]/50" onClick={() => fillCredentials('admin@mit.edu', 'password123')}>
                 <div className="flex items-center justify-between mb-1">
-                  <h4 className="font-semibold text-xs">John Alumni</h4>
-                  <Badge variant="secondary" className="text-[10px]">Alumni</Badge>
+                  <h4 className="font-semibold text-sm">MIT Admin</h4>
+                  <Badge variant="destructive" className="text-[10px]">Admin</Badge>
                 </div>
-                <p className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded">alumni_john / alumni123</p>
+                <p className="text-xs font-mono bg-muted px-2 py-1 rounded">admin@mit.edu</p>
+              </Card>
+
+              <Card className="p-3 hover:shadow-md transition-all cursor-pointer bg-[#8C1515]/5 border-[#8C1515]/20 hover:border-[#8C1515]/50" onClick={() => fillCredentials('admin@stanford.edu', 'password123')}>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-semibold text-sm">Stanford Admin</h4>
+                  <Badge className="bg-[#8C1515] text-white text-[10px]">Admin</Badge>
+                </div>
+                <p className="text-xs font-mono bg-muted px-2 py-1 rounded">admin@stanford.edu</p>
               </Card>
             </div>
           </Card>
 
-          {/* API Info */}
-          <Card className="p-4 bg-muted/50">
-            <p className="text-xs text-muted-foreground text-center">
-              Connected to backend API.<br />
-              Click any card above to fill credentials.
-            </p>
+          {/* MIT Alumni Credentials */}
+          <Card className="p-4 bg-gradient-to-br from-[#A31F34]/10 to-[#750014]/10 border-[#A31F34]/20">
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap className="w-5 h-5" style={{ color: '#A31F34' }} />
+              <h3 className="font-bold text-base">MIT Alumni</h3>
+            </div>
+            
+            <div className="space-y-2">
+              <Card className="p-2 hover:shadow-md transition-all cursor-pointer hover:border-[#A31F34]/50" onClick={() => fillCredentials('john.doe@alumni.mit.edu', 'password123')}>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-semibold text-xs">John Doe</h4>
+                  <Badge variant="secondary" className="text-[10px]">Mentor</Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Computer Science '20</p>
+                <p className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded mt-1">john.doe@alumni.mit.edu</p>
+              </Card>
+
+              <Card className="p-2 hover:shadow-md transition-all cursor-pointer hover:border-[#A31F34]/50" onClick={() => fillCredentials('jane.smith@alumni.mit.edu', 'password123')}>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-semibold text-xs">Jane Smith</h4>
+                  <Badge variant="secondary" className="text-[10px]">Mentor</Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Electrical Engineering '19</p>
+                <p className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded mt-1">jane.smith@alumni.mit.edu</p>
+              </Card>
+
+              <Card className="p-2 hover:shadow-md transition-all cursor-pointer hover:border-[#A31F34]/50" onClick={() => fillCredentials('bob.wilson@alumni.mit.edu', 'password123')}>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-semibold text-xs">Bob Wilson</h4>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Mechanical Engineering '21</p>
+                <p className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded mt-1">bob.wilson@alumni.mit.edu</p>
+              </Card>
+            </div>
+          </Card>
+
+          {/* Stanford Alumni Credentials */}
+          <Card className="p-4 bg-gradient-to-br from-[#8C1515]/10 to-[#B83A4B]/10 border-[#8C1515]/20">
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap className="w-5 h-5" style={{ color: '#8C1515' }} />
+              <h3 className="font-bold text-base">Stanford Alumni</h3>
+            </div>
+            
+            <div className="space-y-2">
+              <Card className="p-2 hover:shadow-md transition-all cursor-pointer hover:border-[#8C1515]/50" onClick={() => fillCredentials('alice.johnson@alumni.stanford.edu', 'password123')}>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-semibold text-xs">Alice Johnson</h4>
+                  <Badge variant="secondary" className="text-[10px]">Mentor</Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Business Administration '18</p>
+                <p className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded mt-1">alice.johnson@alumni.stanford.edu</p>
+              </Card>
+
+              <Card className="p-2 hover:shadow-md transition-all cursor-pointer hover:border-[#8C1515]/50" onClick={() => fillCredentials('charlie.brown@alumni.stanford.edu', 'password123')}>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-semibold text-xs">Charlie Brown</h4>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Data Science '20</p>
+                <p className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded mt-1">charlie.brown@alumni.stanford.edu</p>
+              </Card>
+
+              <Card className="p-2 hover:shadow-md transition-all cursor-pointer hover:border-[#8C1515]/50" onClick={() => fillCredentials('david.lee@alumni.stanford.edu', 'password123')}>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-semibold text-xs">David Lee</h4>
+                  <Badge variant="secondary" className="text-[10px]">Mentor</Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Medicine '19</p>
+                <p className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded mt-1">david.lee@alumni.stanford.edu</p>
+              </Card>
+            </div>
           </Card>
         </div>
       </div>

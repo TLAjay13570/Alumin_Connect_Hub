@@ -29,15 +29,18 @@ const PWAInstallPrompt = () => {
     const mobile = isMobileDevice();
     setIsMobile(mobile);
 
-    // Check service worker status for debugging
+    // Check service worker status for debugging (with delay to allow registration)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistration().then((registration) => {
-        if (registration) {
-          console.log('Service Worker is registered and active:', registration.active?.state);
-        } else {
-          console.warn('Service Worker is not registered');
-        }
-      });
+      setTimeout(() => {
+        navigator.serviceWorker.getRegistration().then((registration) => {
+          if (registration) {
+            console.log('Service Worker is registered and active:', registration.active?.state);
+          } else {
+            // Don't warn - it might still be registering
+            console.log('Service Worker registration pending...');
+          }
+        });
+      }, 1000); // Wait 1 second for registration to complete
     }
 
     // Check if manifest is accessible

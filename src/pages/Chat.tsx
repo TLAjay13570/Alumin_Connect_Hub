@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Send, Users, Menu } from 'lucide-react';
+import { Search, Send, Users, Menu, MessageSquare } from 'lucide-react';
 import { useGroups } from '@/contexts/GroupsContext';
 import { useConnections } from '@/contexts/ConnectionsContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -235,8 +235,19 @@ const Chat = () => {
             <div className="flex-1 overflow-y-auto">
               {filteredChats.length === 0 ? (
                 <div className="p-8 text-center">
-                  <Search className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
-                  <p className="text-sm text-muted-foreground">No chats found</p>
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="relative mb-4">
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                          <MessageSquare className="w-5 h-5 text-primary/60" />
+                        </div>
+                      </div>
+                    </div>
+                    <h4 className="font-medium mb-1">No Chats Found</h4>
+                    <p className="text-sm text-muted-foreground max-w-xs">
+                      {searchQuery ? `No results for "${searchQuery}"` : 'Start a conversation by connecting with alumni!'}
+                    </p>
+                  </div>
                 </div>
               ) : (
                 filteredChats.map((chat) => (

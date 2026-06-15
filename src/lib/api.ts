@@ -1,397 +1,810 @@
-import { TOKEN_KEYS, RefreshTokenResponse } from '@/types/auth';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://alumni-portal-yw7q.onrender.com';
-
-// API endpoints
-export const API_ENDPOINTS = {
-  AUTH: {
-    LOGIN: '/api/v1/auth/login',
-    REGISTER: '/api/v1/auth/register',
-    ME: '/api/v1/auth/me',
-    REFRESH: '/api/v1/auth/refresh',
-    LOGOUT: '/api/v1/auth/logout',
-    TEMPLATE: '/api/v1/auth/template',
-  },
-  FEED: {
-    POSTS: '/api/v1/feed/posts',
-    POST: (id: number) => `/api/v1/feed/posts/${id}`,
-    POST_COMMENTS: (postId: number) => `/api/v1/feed/posts/${postId}/comments`,
-    POST_LIKE: (postId: number) => `/api/v1/feed/posts/${postId}/like`,
-    COMMENT: (commentId: number) => `/api/v1/feed/comments/${commentId}`,
-    FILTER_OPTIONS: '/api/v1/feed/posts/filters/options',
-    // Media endpoints
-    POST_MEDIA: (postId: number) => `/api/v1/feed/posts/${postId}/media`,
-    DELETE_MEDIA: (postId: number, mediaId: number) => `/api/v1/feed/posts/${postId}/media/${mediaId}`,
-    // Admin endpoints
-    ADMIN_POSTS: '/api/v1/feed/admin/posts',
-    ADMIN_HIDE_POST: (postId: number) => `/api/v1/feed/admin/posts/${postId}/hide`,
-    ADMIN_RESTORE_POST: (postId: number) => `/api/v1/feed/admin/posts/${postId}/restore`,
-    ADMIN_PIN_POST: (postId: number) => `/api/v1/feed/admin/posts/${postId}/pin`,
-  },
-  USERS: {
-    LIST: '/api/v1/users',
-    GET_BY_ID: (id: number) => `/api/v1/users/${id}`,
-  },
-  ALUMNI: {
-    ME: '/api/v1/alumni/me',
-    LIST: '/api/v1/alumni',
-    GET_BY_ID: (id: number) => `/api/v1/alumni/${id}`,
-  },
-  EVENTS: {
-    LIST: '/api/v1/events',
-    GET_BY_ID: (id: number) => `/api/v1/events/${id}`,
-    CREATE: '/api/v1/events',
-    UPDATE: (id: number) => `/api/v1/events/${id}`,
-    DELETE: (id: number) => `/api/v1/events/${id}`,
-    REGISTER: (id: number) => `/api/v1/events/${id}/register`,
-    UNREGISTER: (id: number) => `/api/v1/events/${id}/unregister`,
-    ATTENDEES: (id: number) => `/api/v1/events/${id}/attendees`,
-  },
-  DOCUMENTS: {
-    LIST: '/api/v1/documents',
-    UPLOAD: '/api/v1/documents/upload',
-    SEARCH: '/api/v1/documents/search',
-    GET_BY_ID: (id: number) => `/api/v1/documents/${id}`,
-    UPDATE: (id: number) => `/api/v1/documents/${id}`,
-    DELETE: (id: number) => `/api/v1/documents/${id}`,
-  },
-  DOCUMENT_REQUESTS: {
-    LIST: '/api/v1/document-requests',
-    CREATE: '/api/v1/document-requests',
-    GET_BY_ID: (id: number) => `/api/v1/document-requests/${id}`,
-    UPDATE_STATUS: (id: number) => `/api/v1/document-requests/${id}`,
-  },
-  CHAT: {
-    MESSAGE: '/api/v1/chat/message',
-    SESSIONS: '/api/v1/chat/sessions',
-    SESSION: (id: number) => `/api/v1/chat/sessions/${id}`,
-  },
-} as const;
-
-// Token management
-export const tokenManager = {
-  getAccessToken: (): string | null => {
-    return localStorage.getItem(TOKEN_KEYS.ACCESS_TOKEN);
-  },
-
-  getRefreshToken: (): string | null => {
-    return localStorage.getItem(TOKEN_KEYS.REFRESH_TOKEN);
-  },
-
-  setTokens: (accessToken: string, refreshToken: string): void => {
-    localStorage.setItem(TOKEN_KEYS.ACCESS_TOKEN, accessToken);
-    localStorage.setItem(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
-  },
-
-  clearTokens: (): void => {
-    localStorage.removeItem(TOKEN_KEYS.ACCESS_TOKEN);
-    localStorage.removeItem(TOKEN_KEYS.REFRESH_TOKEN);
-    localStorage.removeItem(TOKEN_KEYS.USER);
-  },
-
-  isTokenExpired: (token: string): boolean => {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const exp = payload.exp * 1000; // Convert to milliseconds
-      return Date.now() >= exp - 30000; // 30 seconds buffer
-    } catch {
-      return true;
-    }
-  },
+// API Configuration
+// Use environment variable if set, otherwise detect based on hostname
+const getApiBaseURL = () => {
+  // If explicitly set, use it
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // Auto-detect: if on Vercel/production, use Render backend
+  if (window.location.hostname.includes('vercel.app') || 
+      window.location.hostname.includes('alumni-portal')) {
+    return 'https://alumni-portal-yw7q.onrender.com/api/v1';
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:8000/api/v1';
 };
 
-// Flag to prevent multiple refresh attempts
-let isRefreshing = false;
-let refreshPromise: Promise<string | null> | null = null;
+const API_BASE_URL = getApiBaseURL();
 
-// Refresh the access token
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = tokenManager.getRefreshToken();
-  if (!refreshToken) {
-    return null;
+// Types matching backend schemas
+export interface UserResponse {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  university_id?: string;
+  graduation_year?: number;
+  major?: string;
+  role: string;
+  is_mentor: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UniversityBrandingColors {
+  primary: string;
+  secondary: string;
+  accent: string;
+}
+
+export interface UniversityBrandingTheme {
+  light: UniversityBrandingColors;
+  dark: UniversityBrandingColors;
+}
+
+export interface UniversityBrandingResponse {
+  id: string;
+  name: string;
+  logo?: string;
+  colors?: UniversityBrandingTheme;
+  is_enabled: boolean;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  user: UserResponse;
+  university?: UniversityBrandingResponse;
+  universities?: UniversityBrandingResponse[]; // For superadmin
+}
+
+export interface AdResponse {
+  id: string;
+  title: string;
+  description?: string;
+  media_url: string;
+  media_type: 'image' | 'video';
+  link_url?: string;
+  placement: 'left-sidebar' | 'right-sidebar' | 'feed';
+  target_universities: string[];
+  is_active: boolean;
+  impressions: number;
+  clicks: number;
+  created_at?: string;
+  // Legacy fields
+  image?: string;
+  link?: string;
+  type?: string;
+}
+
+// Public ad response (for alumni users)
+export interface PublicAdResponse {
+  id: string;
+  title: string;
+  description?: string;
+  media_url: string;
+  media_type: string;
+  link_url?: string;
+  placement: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  name: string;
+  university_id?: string;
+  graduation_year?: number;
+  major?: string;
+}
+
+export interface UserProfileResponse {
+  id: string;
+  user_id: string;
+  bio?: string;
+  phone?: string;
+  location?: string;
+  job_title?: string;
+  company?: string;
+  linkedin?: string;
+  website?: string;
+  banner?: string;
+  connections_count: number;
+  posts_count: number;
+  experience?: string;
+  education?: string;
+}
+
+export interface UserWithProfileResponse extends UserResponse {
+  profile?: UserProfileResponse;
+  university_name?: string;
+  university?: UniversityBrandingResponse;
+}
+
+// Event types matching backend schemas
+export interface EventResponse {
+  id: string;
+  title: string;
+  date: string;
+  time?: string;
+  location?: string;
+  attendees: number;
+  image?: string;
+  description?: string;
+  is_virtual: boolean;
+  meeting_link?: string;
+  organizer: string;
+  category?: string;
+  is_registered: boolean;
+  created_at: string;
+}
+
+export interface EventListResponse {
+  events: EventResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface EventCreate {
+  title: string;
+  description?: string;
+  image?: string;
+  event_date: string;
+  event_time?: string;
+  location?: string;
+  is_virtual: boolean;
+  meeting_link?: string;
+  category?: string;
+  max_attendees?: number;
+}
+
+export interface EventUpdate {
+  title?: string;
+  description?: string;
+  image?: string;
+  event_date?: string;
+  event_time?: string;
+  location?: string;
+  is_virtual?: boolean;
+  meeting_link?: string;
+  category?: string;
+  max_attendees?: number;
+  is_active?: boolean;
+}
+
+// API Client
+class ApiClient {
+  private baseURL: string;
+  private token: string | null = null;
+
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
+    // Load token from localStorage on initialization
+    this.token = localStorage.getItem('auth_token');
   }
 
-  try {
-    const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(refreshToken),
+  setToken(token: string | null) {
+    this.token = token;
+    if (token) {
+      localStorage.setItem('auth_token', token);
+    } else {
+      localStorage.removeItem('auth_token');
+    }
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    // CRITICAL: Bypass service worker for API calls
+    // Use cache: 'no-store' to prevent service worker interception
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      cache: 'no-store', // Don't cache API responses
+      credentials: 'omit', // Don't send credentials (prevents SW issues)
     });
 
     if (!response.ok) {
-      tokenManager.clearTokens();
-      return null;
-    }
-
-    const data: RefreshTokenResponse = await response.json();
-    tokenManager.setTokens(data.access_token, data.refresh_token);
-    return data.access_token;
-  } catch (error) {
-    console.error('Failed to refresh token:', error);
-    tokenManager.clearTokens();
-    return null;
-  }
-}
-
-// Get valid access token (refresh if needed)
-async function getValidAccessToken(): Promise<string | null> {
-  const accessToken = tokenManager.getAccessToken();
-  
-  if (!accessToken) {
-    return null;
-  }
-
-  // Check if token is expired or about to expire
-  if (tokenManager.isTokenExpired(accessToken)) {
-    // If already refreshing, wait for the existing refresh
-    if (isRefreshing && refreshPromise) {
-      return refreshPromise;
-    }
-
-    isRefreshing = true;
-    refreshPromise = refreshAccessToken().finally(() => {
-      isRefreshing = false;
-      refreshPromise = null;
-    });
-
-    return refreshPromise;
-  }
-
-  return accessToken;
-}
-
-// HTTP request options
-interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-  body?: unknown;
-  headers?: Record<string, string>;
-  requireAuth?: boolean;
-}
-
-// API client with automatic token management
-export async function apiClient<T>(
-  endpoint: string,
-  options: RequestOptions = {}
-): Promise<T> {
-  const { method = 'GET', body, headers = {}, requireAuth = true } = options;
-
-  const requestHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...headers,
-  };
-
-  // Add authorization header if required
-  if (requireAuth) {
-    const accessToken = await getValidAccessToken();
-    if (!accessToken) {
-      throw new ApiClientError('Not authenticated', 401);
-    }
-    requestHeaders['Authorization'] = `Bearer ${accessToken}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method,
-    headers: requestHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-
-  // Handle non-JSON responses
-  const contentType = response.headers.get('content-type');
-  const isJson = contentType?.includes('application/json');
-
-  if (!response.ok) {
-    let errorMessage = 'An error occurred';
-    
-    if (isJson) {
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorMessage;
-      } catch {
-        // Use default error message
+      // Handle 401 Unauthorized - token expired or invalid
+      if (response.status === 401) {
+        // Clear invalid token
+        this.setToken(null);
+        localStorage.removeItem('auth_token');
+        // Try to get error message
+        const error = await response.json().catch(() => ({ detail: 'Unauthorized. Please login again.' }));
+        throw new Error(error.detail || 'Session expired. Please login again.');
       }
+      
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
     }
 
-    // Handle 401 - clear tokens and redirect
-    if (response.status === 401) {
-      tokenManager.clearTokens();
-    }
-
-    throw new ApiClientError(errorMessage, response.status);
-  }
-
-  // Return empty object for 204 No Content
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  if (isJson) {
     return response.json();
   }
 
-  return {} as T;
-}
-
-// Custom API error class
-export class ApiClientError extends Error {
-  status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'ApiClientError';
-    this.status = status;
+  // Auth endpoints
+  async login(data: LoginRequest): Promise<TokenResponse> {
+    const response = await this.request<TokenResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    this.setToken(response.access_token);
+    return response;
   }
-}
 
-// File upload client for multipart/form-data requests
-export async function apiFileUpload<T>(
-  endpoint: string,
-  formData: FormData,
-  options: { requireAuth?: boolean; onProgress?: (progress: number) => void } = {}
-): Promise<T> {
-  const { requireAuth = true, onProgress } = options;
+  async register(data: RegisterRequest): Promise<TokenResponse> {
+    const response = await this.request<TokenResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    this.setToken(response.access_token);
+    return response;
+  }
 
-  const headers: Record<string, string> = {};
+  async getCurrentUser(): Promise<UserWithProfileResponse> {
+    return this.request<UserWithProfileResponse>('/auth/me');
+  }
 
-  // Add authorization header if required
-  if (requireAuth) {
-    const accessToken = await getValidAccessToken();
-    if (!accessToken) {
-      throw new ApiClientError('Not authenticated', 401);
+  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.request('/auth/request-password-reset', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      return { success: true, message: 'Password reset email sent' };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Failed to request password reset' };
     }
-    headers['Authorization'] = `Bearer ${accessToken}`;
   }
 
-  // Use XMLHttpRequest for progress tracking
-  if (onProgress) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          onProgress(progress);
-        }
-      });
+  async logout() {
+    this.setToken(null);
+    // Also clear user data from localStorage
+    localStorage.removeItem('alumni_user');
+  }
 
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            resolve(response);
-          } catch {
-            resolve({} as T);
-          }
-        } else {
-          let errorMessage = 'An error occurred';
-          try {
-            const errorData = JSON.parse(xhr.responseText);
-            errorMessage = errorData.detail || errorMessage;
-          } catch {
-            // Use default error message
-          }
-          reject(new ApiClientError(errorMessage, xhr.status));
-        }
-      });
+  // Event endpoints
+  async getEvents(page: number = 1, pageSize: number = 20, filters?: {
+    university_id?: string;
+    category?: string;
+    is_virtual?: boolean;
+    search?: string;
+  }): Promise<EventListResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+    if (filters?.university_id) params.append('university_id', filters.university_id);
+    if (filters?.category) params.append('category', filters.category);
+    if (filters?.is_virtual !== undefined) params.append('is_virtual', filters.is_virtual.toString());
+    if (filters?.search) params.append('search', filters.search);
+    
+    return this.request<EventListResponse>(`/events?${params.toString()}`);
+  }
 
-      xhr.addEventListener('error', () => {
-        reject(new ApiClientError('Network error', 0));
-      });
+  async getEvent(eventId: string): Promise<EventResponse> {
+    return this.request<EventResponse>(`/events/${eventId}`);
+  }
 
-      xhr.open('POST', `${API_BASE_URL}${endpoint}`);
-      
-      // Set headers (but not Content-Type - browser sets it with boundary for FormData)
-      Object.entries(headers).forEach(([key, value]) => {
-        xhr.setRequestHeader(key, value);
-      });
-
-      xhr.send(formData);
+  async createEvent(data: EventCreate): Promise<EventResponse> {
+    return this.request<EventResponse>('/events', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 
-  // Standard fetch for non-progress requests
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  });
+  async updateEvent(eventId: string, data: EventUpdate): Promise<EventResponse> {
+    return this.request<EventResponse>(`/events/${eventId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
 
-  const contentType = response.headers.get('content-type');
-  const isJson = contentType?.includes('application/json');
+  async deleteEvent(eventId: string): Promise<{ message: string; success: boolean }> {
+    return this.request<{ message: string; success: boolean }>(`/events/${eventId}`, {
+      method: 'DELETE',
+    });
+  }
 
-  if (!response.ok) {
-    let errorMessage = 'An error occurred';
+  async registerForEvent(eventId: string): Promise<{ message: string; success: boolean; attendees: number }> {
+    return this.request<{ message: string; success: boolean; attendees: number }>(`/events/${eventId}/register`, {
+      method: 'POST',
+    });
+  }
+
+  async unregisterFromEvent(eventId: string): Promise<{ message: string; success: boolean; attendees: number }> {
+    return this.request<{ message: string; success: boolean; attendees: number }>(`/events/${eventId}/register`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getRegisteredEvents(page: number = 1, pageSize: number = 20): Promise<EventListResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+    return this.request<EventListResponse>(`/events/registered/me?${params.toString()}`);
+  }
+
+  // University endpoints
+  async getUniversity(universityId: string): Promise<UniversityBrandingResponse> {
+    return this.request<UniversityBrandingResponse>(`/universities/${universityId}`);
+  }
+
+  async updateUniversityBranding(
+    universityId: string,
+    branding: {
+      light_primary?: string;
+      light_secondary?: string;
+      light_accent?: string;
+      dark_primary?: string;
+      dark_secondary?: string;
+      dark_accent?: string;
+    }
+  ): Promise<UniversityBrandingResponse> {
+    return this.request<UniversityBrandingResponse>(`/universities/${universityId}/branding`, {
+      method: 'PUT',
+      body: JSON.stringify(branding),
+    });
+  }
+
+  async updateUniversity(
+    universityId: string,
+    data: {
+      name?: string;
+      logo?: string;
+      is_enabled?: boolean;
+    }
+  ): Promise<UniversityBrandingResponse> {
+    return this.request<UniversityBrandingResponse>(`/universities/${universityId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Document endpoints
+  async getDocumentRequests(statusFilter?: string, page: number = 1, pageSize: number = 20): Promise<{
+    requests: Array<{
+      id: string;
+      document_type: string;
+      reason?: string;
+      status: string;
+      requested_at: string;
+      estimated_completion?: string;
+    }>;
+    total: number;
+    page: number;
+    page_size: number;
+  }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+    if (statusFilter) params.append('status_filter', statusFilter);
+    return this.request(`/documents/requests?${params.toString()}`);
+  }
+
+  async createDocumentRequest(data: {
+    document_type: string;
+    reason?: string;
+  }): Promise<{
+    id: string;
+    document_type: string;
+    reason?: string;
+    status: string;
+    requested_at: string;
+    estimated_completion?: string;
+  }> {
+    return this.request('/documents/requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async cancelDocumentRequest(requestId: string): Promise<{ message: string; success: boolean }> {
+    return this.request(`/documents/requests/${requestId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Admin document endpoints
+  async getAdminDocumentRequests(statusFilter?: string, page: number = 1, pageSize: number = 20): Promise<{
+    requests: Array<{
+      id: string;
+      user_id: string;
+      user_name: string;
+      user_email: string;
+      document_type: string;
+      reason?: string;
+      status: string;
+      requested_at: string;
+      estimated_completion?: string;
+    }>;
+    total: number;
+    page: number;
+    page_size: number;
+  }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+    if (statusFilter) params.append('status_filter', statusFilter);
+    return this.request(`/admin/documents?${params.toString()}`);
+  }
+
+  async updateDocumentRequestStatus(
+    requestId: string,
+    status: 'pending' | 'approved' | 'rejected' | 'in_progress' | 'completed'
+  ): Promise<{ message: string; success: boolean }> {
+    // Backend expects new_status as a query parameter
+    const params = new URLSearchParams({ new_status: status });
+    return this.request(`/admin/documents/${requestId}/status?${params.toString()}`, {
+      method: 'PUT',
+    });
+  }
+
+  // Post endpoints - using /feed/posts path
+  async getPosts(page: number = 1, pageSize: number = 20, filters?: {
+    university_id?: string;
+    post_type?: string;
+    tag?: string;
+    author_id?: string;
+  }): Promise<{
+    posts: Array<{
+      id: string;
+      author: { id: string; name: string; avatar?: string; title?: string; company?: string };
+      type: string;
+      content: string;
+      media_url?: string;
+      video_url?: string;
+      thumbnail_url?: string;
+      tag?: string;
+      job_title?: string;
+      company?: string;
+      location?: string;
+      likes_count: number;
+      comments_count: number;
+      shares_count: number;
+      is_liked: boolean;
+      can_edit: boolean;
+      can_delete: boolean;
+      time: string;
+      created_at: string;
+    }>;
+    total: number;
+    page: number;
+    page_size: number;
+  }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+    if (filters?.university_id) params.append('university_id', filters.university_id);
+    if (filters?.post_type) params.append('post_type', filters.post_type);
+    if (filters?.tag) params.append('tag', filters.tag);
+    if (filters?.author_id) params.append('author_id', filters.author_id);
     
-    if (isJson) {
+    return this.request(`/feed/posts?${params.toString()}`);
+  }
+
+  async getPost(postId: string): Promise<{
+    id: string;
+    author: { id: string; name: string; avatar?: string; title?: string; company?: string };
+    type: string;
+    content: string;
+    media_url?: string;
+    video_url?: string;
+    thumbnail_url?: string;
+    tag?: string;
+    job_title?: string;
+    company?: string;
+    location?: string;
+    likes_count: number;
+    comments_count: number;
+    shares_count: number;
+    is_liked: boolean;
+    can_edit: boolean;
+    can_delete: boolean;
+    time: string;
+    created_at: string;
+  }> {
+    return this.request(`/feed/posts/${postId}`);
+  }
+
+  async createPost(data: {
+    type?: string;
+    content: string;
+    media_url?: string;
+    video_url?: string;
+    thumbnail_url?: string;
+    tag?: string;
+    job_title?: string;
+    company?: string;
+    location?: string;
+  }): Promise<any> {
+    return this.request('/feed/posts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePost(postId: string, data: {
+    content?: string;
+    media_url?: string;
+    video_url?: string;
+    thumbnail_url?: string;
+    tag?: string;
+    job_title?: string;
+    company?: string;
+    location?: string;
+  }): Promise<any> {
+    return this.request(`/feed/posts/${postId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadMedia(file: File, mediaType: 'image' | 'video'): Promise<{ url: string; type: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('media_type', mediaType);
+
+    const url = `${this.baseURL}/feed/posts/upload-media`;
+    const headers: HeadersInit = {};
+    
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    // DO NOT set Content-Type header - browser will set it automatically with boundary for FormData
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+      cache: 'no-store', // Force network request
+      credentials: 'omit', // Avoid CORS issues
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Upload failed with status ${response.status}`;
       try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorMessage;
+        const error = await response.json();
+        errorMessage = error.detail || error.message || errorMessage;
       } catch {
-        // Use default error message
+        errorMessage = await response.text().catch(() => errorMessage);
       }
+      throw new Error(errorMessage);
     }
 
-    if (response.status === 401) {
-      tokenManager.clearTokens();
-    }
-
-    throw new ApiClientError(errorMessage, response.status);
-  }
-
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  if (isJson) {
     return response.json();
   }
 
-  return {} as T;
-}
-
-// API client for DELETE requests that return 204 No Content
-export async function apiDelete(
-  endpoint: string,
-  options: { requireAuth?: boolean } = {}
-): Promise<void> {
-  const { requireAuth = true } = options;
-
-  const headers: Record<string, string> = {};
-
-  if (requireAuth) {
-    const accessToken = await getValidAccessToken();
-    if (!accessToken) {
-      throw new ApiClientError('Not authenticated', 401);
-    }
-    headers['Authorization'] = `Bearer ${accessToken}`;
+  async deletePost(postId: string): Promise<{ message: string; success: boolean }> {
+    return this.request(`/feed/posts/${postId}`, {
+      method: 'DELETE',
+    });
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method: 'DELETE',
-    headers,
-  });
+  // Like/Unlike posts
+  async likePost(postId: string): Promise<{ likes_count: number; is_liked: boolean }> {
+    return this.request(`/feed/posts/${postId}/like`, {
+      method: 'POST',
+    });
+  }
 
-  if (!response.ok) {
-    let errorMessage = 'An error occurred';
+  async unlikePost(postId: string): Promise<{ likes_count: number; is_liked: boolean }> {
+    return this.request(`/feed/posts/${postId}/like`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Comment endpoints
+  async getComments(postId: string): Promise<Array<{
+    id: string;
+    content: string;
+    author: { id: string; name: string; avatar?: string };
+    created_at: string;
+    time: string;
+  }>> {
+    return this.request(`/feed/posts/${postId}/comments`);
+  }
+
+  async createComment(postId: string, content: string): Promise<{
+    id: string;
+    content: string;
+    author: { id: string; name: string; avatar?: string };
+    created_at: string;
+    time: string;
+  }> {
+    return this.request(`/feed/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async deleteComment(postId: string, commentId: string): Promise<{ message: string }> {
+    return this.request(`/feed/posts/${postId}/comments/${commentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Lead Intelligence endpoints (super admin only)
+  async getLeadIntelligence(filters?: {
+    university_id?: string;
+    min_score?: number;
+    category?: 'hot' | 'warm' | 'cold';
+  }): Promise<Array<{
+    user_id: string;
+    user_name: string;
+    user_email: string;
+    university_id: string;
+    university_name: string;
+    graduation_year?: number;
+    major?: string;
+    ad_clicks: number;
+    ad_impressions: number;
+    clicked_ads: string[];
+    last_ad_interaction?: string;
+    roadmap_views: number;
+    roadmap_generated: number;
+    career_goals: string[];
+    ad_engagement_score: number;
+    career_engagement_score: number;
+    overall_lead_score: number;
+    lead_category: string;
+  }>> {
+    const params = new URLSearchParams();
+    if (filters?.university_id) params.append('university_id', filters.university_id);
+    if (filters?.min_score) params.append('min_score', filters.min_score.toString());
+    if (filters?.category) params.append('category', filters.category);
     
-    const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorMessage;
-      } catch {
-        // Use default error message
-      }
-    }
+    return this.request(`/lead-intelligence/leads?${params.toString()}`);
+  }
 
-    if (response.status === 401) {
-      tokenManager.clearTokens();
-    }
+  async getTopAds(limit: number = 10): Promise<Array<{
+    ad_id: string;
+    ad_title: string;
+    clicks: number;
+    impressions: number;
+    ctr: number;
+  }>> {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    return this.request(`/lead-intelligence/top-ads?${params.toString()}`);
+  }
 
-    throw new ApiClientError(errorMessage, response.status);
+  async getCareerPaths(limit: number = 10): Promise<Array<{
+    career_goal: string;
+    requests: number;
+    views: number;
+  }>> {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    return this.request(`/lead-intelligence/career-paths?${params.toString()}`);
+  }
+
+  // SuperAdmin Advertisement Management
+  async getAds(includeInactive: boolean = true): Promise<{
+    ads: AdResponse[];
+    total: number;
+    active_count: number;
+  }> {
+    const params = new URLSearchParams({ include_inactive: includeInactive.toString() });
+    return this.request(`/superadmin/ads?${params.toString()}`);
+  }
+
+  async getAd(adId: string): Promise<AdResponse> {
+    return this.request(`/superadmin/ads/${adId}`);
+  }
+
+  async createAd(data: {
+    title: string;
+    description?: string;
+    media_url: string;
+    media_type: 'image' | 'video';
+    link_url?: string;
+    placement: 'left-sidebar' | 'right-sidebar' | 'feed';
+    target_universities: string[];
+  }): Promise<AdResponse> {
+    return this.request('/superadmin/ads', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAd(adId: string, data: {
+    title?: string;
+    description?: string;
+    media_url?: string;
+    media_type?: 'image' | 'video';
+    link_url?: string;
+    placement?: 'left-sidebar' | 'right-sidebar' | 'feed';
+    target_universities?: string[];
+    is_active?: boolean;
+  }): Promise<AdResponse> {
+    return this.request(`/superadmin/ads/${adId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async toggleAdStatus(adId: string): Promise<AdResponse> {
+    return this.request(`/superadmin/ads/${adId}/toggle`, {
+      method: 'PATCH',
+    });
+  }
+
+  async deleteAd(adId: string): Promise<{ message: string; success: boolean }> {
+    return this.request(`/superadmin/ads/${adId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async recordAdImpression(adId: string): Promise<{ success: boolean }> {
+    return this.request(`/superadmin/ads/${adId}/impression`, {
+      method: 'POST',
+    });
+  }
+
+  async recordAdClick(adId: string): Promise<{ success: boolean }> {
+    return this.request(`/superadmin/ads/${adId}/click`, {
+      method: 'POST',
+    });
+  }
+
+  // SuperAdmin Universities (for ad targeting)
+  async getSuperAdminUniversities(): Promise<Array<{
+    id: string;
+    name: string;
+    logo?: string;
+    is_enabled: boolean;
+    alumni_count: number;
+    admin_count: number;
+  }>> {
+    return this.request('/superadmin/universities');
+  }
+
+  // Public Ads endpoints (for alumni users)
+  async getAdsForUser(): Promise<{
+    feed_ads: PublicAdResponse[];
+    left_sidebar_ads: PublicAdResponse[];
+    right_sidebar_ads: PublicAdResponse[];
+  }> {
+    return this.request('/ads/for-user');
+  }
+
+  async getPublicAds(placement?: 'feed' | 'left-sidebar' | 'right-sidebar'): Promise<PublicAdResponse[]> {
+    const params = placement ? `?placement=${placement}` : '';
+    return this.request(`/ads${params}`);
+  }
+
+  async recordUserAdImpression(adId: string): Promise<{ success: boolean }> {
+    return this.request(`/ads/${adId}/impression`, {
+      method: 'POST',
+    });
+  }
+
+  async recordUserAdClick(adId: string): Promise<{ success: boolean }> {
+    return this.request(`/ads/${adId}/click`, {
+      method: 'POST',
+    });
   }
 }
 
-// Export base URL for reference
-export { API_BASE_URL };
+export const apiClient = new ApiClient(API_BASE_URL);
+

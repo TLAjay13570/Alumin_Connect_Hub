@@ -216,9 +216,34 @@ const AdminPasswordResets = () => {
       {/* Requests List */}
       <div className="space-y-4">
         {filteredRequests.length === 0 ? (
-          <Card className="p-8 text-center">
-            <Key className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No password reset requests found</p>
+          <Card className="p-10 text-center border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative mb-5">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500/10 to-green-500/5 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center">
+                    <Key className="w-7 h-7 text-green-500/60" />
+                  </div>
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">
+                {filter === 'all' ? 'No Password Reset Requests' : `No ${filter.charAt(0).toUpperCase() + filter.slice(1)} Requests`}
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                {filter === 'all' 
+                  ? 'Password reset requests from alumni will appear here.'
+                  : filter === 'pending'
+                  ? 'Great! No pending requests need your attention.'
+                  : `No ${filter} requests at the moment.`}
+              </p>
+              {filter !== 'all' && (
+                <Button variant="outline" className="mt-4" onClick={() => setFilter('all')}>
+                  View All Requests
+                </Button>
+              )}
+            </div>
           </Card>
         ) : (
           filteredRequests.map(request => (

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Shield, Mail, Phone, Award, Grid3x3, Table2, Filter, X } from 'lucide-react';
+import { Search, Shield, Mail, Phone, Award, Grid3x3, Table2, Filter, X, GraduationCap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 interface AlumniUser {
@@ -294,8 +294,20 @@ const AdminMentorList = () => {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginatedMentors.length === 0 ? (
-              <Card className="p-8 text-center col-span-full">
-                <p className="text-muted-foreground">No mentors found</p>
+              <Card className="p-10 text-center col-span-full border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+                <div className="flex flex-col items-center justify-center">
+                  <div className="relative mb-5">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                        <GraduationCap className="w-7 h-7 text-primary/60" />
+                      </div>
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">No Mentors Found</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm">
+                    {getActiveFilterCount() > 0 ? 'No mentors match your filters. Try adjusting your search.' : 'No alumni have registered as mentors yet.'}
+                  </p>
+                </div>
               </Card>
             ) : (
               paginatedMentors.map(mentor => (
@@ -394,8 +406,18 @@ const AdminMentorList = () => {
               <TableBody>
                 {paginatedMentors.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No mentors found
+                    <TableCell colSpan={6} className="py-12">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-4">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                            <Search className="w-5 h-5 text-primary/60" />
+                          </div>
+                        </div>
+                        <h4 className="font-medium mb-1">No Mentors Found</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {getActiveFilterCount() > 0 ? 'No mentors match your filters.' : 'No mentors available'}
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (

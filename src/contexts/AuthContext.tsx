@@ -1,45 +1,32 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { authService } from '@/services/authService';
-import { alumniService } from '@/services/alumniService';
-import { tokenManager } from '@/lib/api';
-import { ApiUser, UserRole, TOKEN_KEYS, LoginRequest, RegisterRequest } from '@/types/auth';
-import { FrontendAlumniProfile } from '@/types/alumni';
+import { apiClient } from '@/lib/api';
+import type { UserResponse, UserWithProfileResponse } from '@/lib/api';
 
-// Frontend User interface that maps from API
 interface User {
   id: string;
   email: string;
   name: string;
-  username: string;
   avatar?: string;
   university: string;
   universityId?: string;
   graduationYear?: number;
   major?: string;
   bio?: string;
-  role: 'alumni' | 'admin' | 'superadmin';
+  role?: 'alumni' | 'admin' | 'superadmin';
   isMentor?: boolean;
-  isVerified?: boolean;
-  isActive?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
-  alumniProfile: FrontendAlumniProfile | null;
-  isAuthenticated: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isLoading: boolean;
-  isInitialized: boolean;
-  isAlumniProfileLoading: boolean;
-  login: (emailOrUsername: string, password: string) => Promise<void>;
-  register: (data: { email: string; username: string; password: string; fullName: string }) => Promise<void>;
-  logout: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
   updateProfile: (data: Partial<User>) => void;
-  refreshUser: () => Promise<void>;
-  refreshAlumniProfile: () => Promise<void>;
-  updateAlumniProfile: (data: Partial<FrontendAlumniProfile>) => Promise<FrontendAlumniProfile>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; universityId?: string; message: string }>;
+  loading: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -50,240 +37,116 @@ export const useAuth = () => {
   return context;
 };
 
-// Map backend role to frontend role
-function mapApiRoleToFrontend(role: UserRole): 'alumni' | 'admin' | 'superadmin' {
-  switch (role) {
-    case 'SUPER_ADMIN':
-      return 'superadmin';
-    case 'UNIVERSITY_ADMIN':
-      return 'admin';
-    case 'ALUMNI':
-    case 'STUDENT':
-    default:
-      return 'alumni';
-  }
-}
-
-// Map API user to frontend user
-function mapApiUserToFrontend(apiUser: ApiUser): User {
+// Convert backend UserResponse to frontend User format
+const convertUserResponse = (userData: UserResponse | UserWithProfileResponse, universityName?: string): User => {
   return {
-    id: String(apiUser.id),
-    email: apiUser.email,
-    name: apiUser.full_name,
-    username: apiUser.username,
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiUser.username}`,
-    university: apiUser.university_id ? `University ${apiUser.university_id}` : 'Alumni Network',
-    universityId: apiUser.university_id ? String(apiUser.university_id) : undefined,
-    role: mapApiRoleToFrontend(apiUser.role),
-    isVerified: apiUser.is_verified,
-    isActive: apiUser.is_active,
+    id: userData.id,
+    email: userData.email,
+    name: userData.name,
+    avatar: userData.avatar,
+    university: universityName || 'Unknown University',
+    universityId: userData.university_id,
+    graduationYear: userData.graduation_year,
+    major: userData.major,
+    bio: 'profile' in userData ? userData.profile?.bio : undefined,
+    role: userData.role as 'alumni' | 'admin' | 'superadmin',
+    isMentor: userData.is_mentor,
   };
-}
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [alumniProfile, setAlumniProfile] = useState<FrontendAlumniProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isAlumniProfileLoading, setIsAlumniProfileLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Initialize auth state on mount
+  // Check for existing token and fetch user on mount
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        // Check if we have tokens
-        const accessToken = tokenManager.getAccessToken();
-        if (!accessToken) {
-          setIsInitialized(true);
-          return;
-        }
-
-        // Check if token is expired
-        if (tokenManager.isTokenExpired(accessToken)) {
-          // Try to refresh
-          const refreshToken = tokenManager.getRefreshToken();
-          if (!refreshToken) {
-            tokenManager.clearTokens();
-            setIsInitialized(true);
-            return;
-          }
-        }
-
-        // Fetch current user from API
-        const apiUser = await authService.getCurrentUser();
-        const frontendUser = mapApiUserToFrontend(apiUser);
-        setUser(frontendUser);
-        
-        // Also store in localStorage for quick access
-        localStorage.setItem(TOKEN_KEYS.USER, JSON.stringify(frontendUser));
-
-        // Fetch alumni profile (non-blocking)
+    const initAuth = async () => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
         try {
-          const profile = await alumniService.getMyProfile();
-          setAlumniProfile(profile);
-        } catch {
-          // Profile might not exist yet - that's okay
-          setAlumniProfile(null);
+          const userData = await apiClient.getCurrentUser();
+          const convertedUser = convertUserResponse(userData, userData.university_name);
+          setUser(convertedUser);
+          localStorage.setItem('alumni_user', JSON.stringify(convertedUser));
+        } catch (error) {
+          console.error('Failed to fetch user:', error);
+          // Token might be invalid, clear it
+          apiClient.logout();
+          localStorage.removeItem('alumni_user');
         }
-      } catch (error) {
-        console.error('Failed to initialize auth:', error);
-        tokenManager.clearTokens();
-      } finally {
-        setIsInitialized(true);
       }
+      setLoading(false);
     };
 
-    initializeAuth();
+    initAuth();
   }, []);
 
-  // Login function
-  const login = useCallback(async (emailOrUsername: string, password: string) => {
-    setIsLoading(true);
+  const login = async (email: string, password: string) => {
     try {
-      // Determine if input is email or username
-      const isEmail = emailOrUsername.includes('@');
-      const credentials: LoginRequest = {
-        password,
-        ...(isEmail ? { email: emailOrUsername } : { username: emailOrUsername }),
-      };
-
-      // Call login API
-      await authService.login(credentials);
-
-      // Fetch user details
-      const apiUser = await authService.getCurrentUser();
-      const frontendUser = mapApiUserToFrontend(apiUser);
-      
-      setUser(frontendUser);
-      localStorage.setItem(TOKEN_KEYS.USER, JSON.stringify(frontendUser));
-
-      // Fetch alumni profile (non-blocking)
-      try {
-        const profile = await alumniService.getMyProfile();
-        setAlumniProfile(profile);
-      } catch {
-        // Profile might not exist yet - that's okay
-        setAlumniProfile(null);
-      }
-    } catch (error) {
-      throw error;
-    } finally {
-      setIsLoading(false);
+      const response = await apiClient.login({ email, password });
+      const convertedUser = convertUserResponse(
+        response.user,
+        response.university?.name
+      );
+      setUser(convertedUser);
+      localStorage.setItem('alumni_user', JSON.stringify(convertedUser));
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      throw new Error(error.message || 'Login failed. Please check your credentials.');
     }
-  }, []);
+  };
 
-  // Register function
-  const register = useCallback(async (data: { email: string; username: string; password: string; fullName: string }) => {
-    setIsLoading(true);
-    try {
-      const registerData: RegisterRequest = {
-        email: data.email,
-        username: data.username,
-        password: data.password,
-        full_name: data.fullName,
-      };
+  const logout = () => {
+    apiClient.logout();
+    setUser(null);
+    localStorage.removeItem('alumni_user');
+  };
 
-      const response = await authService.register(registerData);
-      const frontendUser = mapApiUserToFrontend(response.user);
-      
-      setUser(frontendUser);
-      localStorage.setItem(TOKEN_KEYS.USER, JSON.stringify(frontendUser));
-    } catch (error) {
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Logout function
-  const logout = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      await authService.logout();
-    } finally {
-      setUser(null);
-      setAlumniProfile(null);
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Refresh user data
   const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
     try {
-      const apiUser = await authService.getCurrentUser();
-      const frontendUser = mapApiUserToFrontend(apiUser);
-      setUser(frontendUser);
-      localStorage.setItem(TOKEN_KEYS.USER, JSON.stringify(frontendUser));
+      const response = await apiClient.getCurrentUser();
+      const transformedUser = convertUserResponse(response, response.university_name);
+      setUser(transformedUser);
+      localStorage.setItem('alumni_user', JSON.stringify(transformedUser));
     } catch (error) {
+      // Token might be expired, clear everything
       console.error('Failed to refresh user:', error);
+      setUser(null);
+      localStorage.removeItem('alumni_user');
+      localStorage.removeItem('auth_token');
     }
   }, []);
 
-  // Refresh alumni profile
-  const refreshAlumniProfile = useCallback(async () => {
-    setIsAlumniProfileLoading(true);
+  const requestPasswordReset = async (email: string): Promise<{ success: boolean; universityId?: string; message: string }> => {
     try {
-      const profile = await alumniService.getMyProfile();
-      setAlumniProfile(profile);
-    } catch (error) {
-      // Profile might not exist yet for new users
-      console.error('Failed to refresh alumni profile:', error);
-      setAlumniProfile(null);
-    } finally {
-      setIsAlumniProfileLoading(false);
+      const result = await apiClient.requestPasswordReset(email);
+      return {
+        success: result.success,
+        message: result.message,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to request password reset',
+      };
     }
-  }, []);
+  };
 
-  // Update alumni profile
-  const updateAlumniProfile = useCallback(async (data: Partial<FrontendAlumniProfile>): Promise<FrontendAlumniProfile> => {
-    const updatedProfile = await alumniService.updateMyProfile(data);
-    setAlumniProfile(updatedProfile);
-    return updatedProfile;
-  }, []);
-
-  // Update profile locally (for optimistic updates)
-  const updateProfile = useCallback((data: Partial<User>) => {
+  const updateProfile = (data: Partial<User>) => {
     if (!user) return;
     const updated = { ...user, ...data };
     setUser(updated);
-    localStorage.setItem(TOKEN_KEYS.USER, JSON.stringify(updated));
-  }, [user]);
+    localStorage.setItem('alumni_user', JSON.stringify(updated));
+  };
 
-  // Password reset request (placeholder - needs backend API)
-  const requestPasswordReset = useCallback(async (email: string): Promise<{ success: boolean; universityId?: string; message: string }> => {
-    // This would typically call a password reset API endpoint
-    // For now, return a placeholder response
-    return {
-      success: true,
-      message: 'Password reset request has been submitted. Please check your email or contact your administrator.',
-    };
-  }, []);
-
-  const isAuthenticated = !!user;
   const isAdmin = user?.role === 'admin';
   const isSuperAdmin = user?.role === 'superadmin';
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        alumniProfile,
-        isAuthenticated,
-        isAdmin,
-        isSuperAdmin,
-        isLoading,
-        isInitialized,
-        isAlumniProfileLoading,
-        login,
-        register,
-        logout,
-        updateProfile,
-        refreshUser,
-        refreshAlumniProfile,
-        updateAlumniProfile,
-        requestPasswordReset,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isAdmin, isSuperAdmin, isLoading: loading, login, logout, updateProfile, requestPasswordReset, loading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

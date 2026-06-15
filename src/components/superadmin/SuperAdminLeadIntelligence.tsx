@@ -414,8 +414,63 @@ const SuperAdminLeadIntelligence = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="space-y-4 sm:space-y-6">
+        {/* Header Skeleton */}
+        <div className="p-4 sm:p-6 bg-gradient-to-br from-primary/5 via-secondary/5 to-accent/5 rounded-xl shadow-lg">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/30 via-secondary/30 to-accent/30 animate-pulse" />
+              <div className="space-y-2">
+                <div className="h-8 w-64 bg-gradient-to-r from-primary/20 to-secondary/20 rounded animate-pulse" />
+                <div className="h-4 w-80 bg-muted/50 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI Cards Skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="p-4 rounded-xl bg-card border border-l-4 border-l-primary/30">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-5 h-5 rounded bg-primary/20 animate-pulse" />
+                <div className="w-12 h-4 rounded-full bg-muted animate-pulse" />
+              </div>
+              <div className="h-8 w-16 bg-muted rounded animate-pulse mb-1" />
+              <div className="h-3 w-20 bg-muted/50 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Charts Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="p-4 rounded-xl bg-card border">
+              <div className="h-5 w-40 bg-muted rounded animate-pulse mb-4" />
+              <div className="h-64 bg-gradient-to-br from-muted/30 to-muted/10 rounded-lg flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-3 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                  <div className="h-3 w-24 bg-muted/50 rounded animate-pulse mx-auto" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Loading Message */}
+        <div className="flex flex-col items-center justify-center py-6">
+          <div className="relative mb-4">
+            <div className="w-14 h-14 rounded-full border-4 border-primary/20 animate-pulse" />
+            <div className="w-14 h-14 rounded-full border-4 border-t-primary border-transparent animate-spin absolute inset-0" />
+            <Target className="w-5 h-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          </div>
+          <p className="text-sm text-muted-foreground animate-pulse">Analyzing lead intelligence data...</p>
+          <div className="flex gap-1 mt-2">
+            <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
       </div>
     );
   }

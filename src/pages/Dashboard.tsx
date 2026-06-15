@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -13,15 +13,11 @@ import CommentSection from '@/components/CommentSection';
 import GlobalSearchDropdown from '@/components/GlobalSearchDropdown';
 import UniversityChatbot from '@/components/UniversityChatbot';
 import PostFilter, { FilterOptions } from '@/components/PostFilter';
-import { PostTag } from '@/types/feed';
 import WorldMapHeatmap from '@/components/WorldMapHeatmap';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { feedService } from '@/services/feedService';
-import { ApiPost, PostMedia } from '@/types/feed';
 import {
   Heart,
   MessageCircle,
@@ -29,6 +25,7 @@ import {
   MoreHorizontal,
   Briefcase,
   Megaphone,
+  Play,
   PlusCircle,
   Search,
   Moon,
@@ -50,6 +47,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { apiClient, PublicAdResponse } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,34 +56,12 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-// Frontend tag format (kebab-case for display)
-type FrontendTag = 'success-story' | 'career-milestone' | 'achievement' | 'learning' | 'volunteering';
-
-// Mapping between API tags and frontend tags
-const apiToFrontendTag: Record<PostTag, FrontendTag> = {
-  'success_story': 'success-story',
-  'career_milestone': 'career-milestone',
-  'achievement': 'achievement',
-  'learning_journey': 'learning',
-  'volunteering': 'volunteering',
-};
-
-const frontendToApiTag: Record<FrontendTag, PostTag> = {
-  'success-story': 'success_story',
-  'career-milestone': 'career_milestone',
-  'achievement': 'achievement',
-  'learning': 'learning_journey',
-  'volunteering': 'volunteering',
-};
-
-// Extended Post type for frontend display
 interface Post {
-  id: number;
+  id: string;
   type: 'text' | 'image' | 'video' | 'job' | 'announcement';
   author: string;
   avatar: string;
   university: string;
-  universityId?: number;
   year: string;
   content: string;
   media?: string;
@@ -97,85 +73,15 @@ interface Post {
   jobTitle?: string;
   company?: string;
   location?: string;
-  tag?: FrontendTag;
-  apiTag?: PostTag; // Original API tag
-  // API fields
-  author_id?: number;
-  user_liked?: boolean;
-  isFromApi?: boolean;
-  // API media attachments
-  apiMedia?: PostMedia[];
+  tag?:
+    | 'success-story'
+    | 'career-milestone'
+    | 'achievement'
+    | 'learning'
+    | 'volunteering';
+  canEdit?: boolean;  // Whether current user can edit this post
+  canDelete?: boolean;  // Whether current user can delete this post
 }
-
-// Helper to format relative time
-const formatRelativeTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-};
-
-// Helper to get API base URL for media
-const getMediaUrl = (url: string): string => {
-  // If it's a relative URL, prepend the API base URL
-  if (url.startsWith('/media/')) {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://alumni-portal-yw7q.onrender.com';
-    return `${API_BASE_URL}${url}`;
-  }
-  return url;
-};
-
-// Convert API post to frontend Post format
-const mapApiPostToPost = (apiPost: ApiPost): Post => {
-  // Determine post type and media URLs from API media attachments
-  let type: Post['type'] = 'text';
-  let media: string | undefined;
-  let videoUrl: string | undefined;
-  let thumbnail: string | undefined;
-
-  if (apiPost.media && apiPost.media.length > 0) {
-    const firstMedia = apiPost.media[0];
-    if (firstMedia.media_type === 'image') {
-      type = 'image';
-      media = getMediaUrl(firstMedia.media_url);
-    } else if (firstMedia.media_type === 'video') {
-      type = 'video';
-      videoUrl = getMediaUrl(firstMedia.media_url);
-      thumbnail = firstMedia.thumbnail_url ? getMediaUrl(firstMedia.thumbnail_url) : undefined;
-    }
-  }
-
-  return {
-    id: apiPost.id,
-    type,
-    author: apiPost.author_name,
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiPost.author_name.replace(/\s+/g, '')}`,
-    university: apiPost.university_name,
-    universityId: apiPost.university_id,
-    year: new Date(apiPost.created_at).getFullYear().toString(),
-    content: apiPost.content,
-    media,
-    videoUrl,
-    thumbnail,
-    likes: apiPost.likes_count,
-    comments: apiPost.comments_count,
-    time: formatRelativeTime(apiPost.created_at),
-    tag: apiPost.tag ? apiToFrontendTag[apiPost.tag] : undefined,
-    apiTag: apiPost.tag,
-    author_id: apiPost.author_id,
-    user_liked: apiPost.user_liked,
-    isFromApi: true,
-    apiMedia: apiPost.media,
-  };
-};
 
 interface Ad {
   id: string;
@@ -183,6 +89,7 @@ interface Ad {
   title: string;
   description: string;
   link: string;
+  media_type?: string;
 }
 
 // Comprehensive dummy data
@@ -531,7 +438,7 @@ const compactAds = [
 ];
 
 const Dashboard = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { isOpen: isSidebarOpen, toggleSidebar } = useSidebar();
   const { toast } = useToast();
@@ -543,132 +450,130 @@ const Dashboard = () => {
   const [editingPost, setEditingPost] = useState<{
     id: number;
     content: string;
-    existingMedia?: { id: number; type: 'image' | 'video'; url: string; postId: number }[];
-    tag?: PostTag;
+    media?: { type: 'image' | 'video'; url: string };
+    tag?: string;
   } | null>(null);
-  const [apiPosts, setApiPosts] = useState<Post[]>([]);
+  const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [displayedPosts, setDisplayedPosts] = useState<(Post | Ad)[]>([]);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
-  const [likingPosts, setLikingPosts] = useState<Set<number>>(new Set()); // Track posts being liked
+  const [postsLoaded, setPostsLoaded] = useState(false); // Track if posts have been loaded
+  const [isLoading, setIsLoading] = useState(true); // Initial loading state
+  const [isRefreshing, setIsRefreshing] = useState(false); // Refreshing with cached data
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [expandedComments, setExpandedComments] = useState<Set<number>>(
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(
     new Set(),
   );
-  const [copiedPostId, setCopiedPostId] = useState<number | null>(null);
-  const [dismissedEventReminder, setDismissedEventReminder] = useState(false);
+  const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
+  const [dismissedEventIds, setDismissedEventIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('dismissed_event_reminders');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Helper to check if today's event is dismissed
+  const isEventDismissed = (eventId: string) => dismissedEventIds.has(eventId);
+
+  // Helper to dismiss an event and persist to localStorage
+  const dismissEventReminder = (eventId: string) => {
+    setDismissedEventIds((prev) => {
+      const updated = new Set(prev);
+      updated.add(eventId);
+      try {
+        localStorage.setItem('dismissed_event_reminders', JSON.stringify([...updated]));
+      } catch {
+        // Ignore storage errors
+      }
+      return updated;
+    });
+  };
+  
+  // Real ads from backend
+  const [feedAds, setFeedAds] = useState<Ad[]>([]);
+  const [leftSidebarAds, setLeftSidebarAds] = useState<Ad[]>([]);
+  const [rightSidebarAds, setRightSidebarAds] = useState<Ad[]>([]);
+  const [adsLoaded, setAdsLoaded] = useState(false);
+  const trackedImpressions = useRef<Set<string>>(new Set());
+  
   const [filters, setFilters] = useState<FilterOptions>({
     postTypes: [],
     tags: [],
     universities: [],
+    searchText: '',
   });
-  const [totalPages, setTotalPages] = useState(1);
-  const [isCreatingPost, setIsCreatingPost] = useState(false);
-  const [isDeletingPost, setIsDeletingPost] = useState<number | null>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
-  const POSTS_PER_PAGE = 20;
+  const POSTS_PER_PAGE = 6;
+  const nextPostId = useRef(1000); // Start user posts at 1000 to avoid conflicts
+  const CACHE_KEY = 'dashboard_posts_cache';
+  const CACHE_EXPIRY_KEY = 'dashboard_posts_cache_expiry';
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  // Fetch posts from API
-  const fetchPosts = useCallback(async (pageNum: number, reset: boolean = false, currentFilters?: FilterOptions) => {
-    if (isLoading) return;
-    
-    setIsLoading(true);
-    setError(null);
-
-    // Use provided filters or current state
-    const activeFilters = currentFilters || filters;
-
+  // Cache helper functions
+  const getCachedPosts = (): Post[] | null => {
     try {
-      const response = await feedService.listPosts({
-        page: pageNum,
-        page_size: POSTS_PER_PAGE,
-        // University filter from API - use first selected or user's university
-        university_id: activeFilters.universities.length > 0 
-          ? activeFilters.universities[0] 
-          : user?.universityId,
-        // Tag filter from API - use first selected tag (API only supports single tag)
-        tag: activeFilters.tags.length > 0 ? activeFilters.tags[0] : undefined,
-      });
-
-      const mappedPosts = response.posts.map(mapApiPostToPost);
-      
-      // Initialize liked posts from API response
-      const initialLikedPosts = new Set<number>();
-      response.posts.forEach(post => {
-        if (post.user_liked) {
-          initialLikedPosts.add(post.id);
-        }
-      });
-      
-      if (reset) {
-        setApiPosts(mappedPosts);
-        setLikedPosts(initialLikedPosts);
-      } else {
-        setApiPosts(prev => [...prev, ...mappedPosts]);
-        setLikedPosts(prev => new Set([...prev, ...initialLikedPosts]));
+      const expiry = sessionStorage.getItem(CACHE_EXPIRY_KEY);
+      if (expiry && Date.now() > parseInt(expiry)) {
+        // Cache expired
+        sessionStorage.removeItem(CACHE_KEY);
+        sessionStorage.removeItem(CACHE_EXPIRY_KEY);
+        return null;
       }
-      
-      setTotalPages(response.total_pages);
-      setHasMore(pageNum < response.total_pages);
-      setPage(pageNum);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load posts';
-      setError(errorMessage);
-      toast({
-        title: 'Error loading posts',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-      setIsInitialLoading(false);
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.universityId, toast]);
+  };
 
-  // Get all posts with filters applied (combines API posts with mock posts as fallback)
-  const getAllPosts = useCallback(() => {
-    let posts = apiPosts.length > 0 ? [...apiPosts] : [...allMockPosts];
+  const setCachedPosts = (posts: Post[]) => {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(posts));
+      sessionStorage.setItem(CACHE_EXPIRY_KEY, (Date.now() + CACHE_DURATION).toString());
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
-    // Apply client-side filters (post type filtering is client-side only)
+  // Combine user posts with mock posts and apply filters
+  const getAllPosts = () => {
+    let posts = [...userPosts, ...allMockPosts];
+
+    // Apply filters
     if (filters.postTypes.length > 0) {
       posts = posts.filter((post) => filters.postTypes.includes(post.type));
     }
 
-    // Tag filtering - API posts use apiTag, mock posts use frontend tag format
     if (filters.tags.length > 0) {
-      posts = posts.filter((post) => {
-        if (post.apiTag) {
-          // API post - check against apiTag
-          return filters.tags.includes(post.apiTag);
-        } else if (post.tag) {
-          // Mock post - convert frontend tag to API format and check
-          const apiTag = frontendToApiTag[post.tag];
-          return apiTag && filters.tags.includes(apiTag);
-        }
-        return false;
-      });
+      posts = posts.filter(
+        (post) => post.tag && filters.tags.includes(post.tag),
+      );
     }
 
-    // University filtering - use university ID for API posts
     if (filters.universities.length > 0) {
-      posts = posts.filter((post) => {
-        if (post.universityId) {
-          return filters.universities.includes(post.universityId);
-        }
-        // Fallback for mock posts (not ideal, but maintains compatibility)
-        return false;
-      });
+      posts = posts.filter((post) =>
+        filters.universities.includes(post.university),
+      );
     }
 
-    return posts;
-  }, [apiPosts, filters]);
+    if (filters.searchText) {
+      const searchLower = filters.searchText.toLowerCase();
+      posts = posts.filter(
+        (post) =>
+          post.content.toLowerCase().includes(searchLower) ||
+          post.author.toLowerCase().includes(searchLower) ||
+          (post.company && post.company.toLowerCase().includes(searchLower)) ||
+          (post.jobTitle && post.jobTitle.toLowerCase().includes(searchLower)),
+      );
+    }
+
+    return posts.sort((a, b) => b.id - a.id);
+  };
 
   // Handle search result selection
   const handleSearchResultSelect = (result: any) => {
@@ -720,169 +625,227 @@ const Dashboard = () => {
     setShowSearchDropdown(searchQuery.trim().length > 0);
   }, [searchQuery]);
 
-  // Load more posts from API
-  const loadMorePosts = useCallback(() => {
-    if (isLoading || !hasMore) return;
-    fetchPosts(page + 1);
-  }, [isLoading, hasMore, page, fetchPosts]);
-
-  // Update displayed posts when API posts change
-  useEffect(() => {
+  // Load more posts
+  const loadMorePosts = () => {
     const allPosts = getAllPosts();
-    
-    // Insert ads every 8 posts (less intrusive)
-    const postsWithAds: (Post | Ad)[] = [];
-    allPosts.forEach((post, idx) => {
-      postsWithAds.push(post);
-      // Add ad after every 8 posts (less intrusive)
-      if ((idx + 1) % 8 === 0) {
-        const adIndex = Math.floor(idx / 8) % mockAds.length;
-        postsWithAds.push(mockAds[adIndex]);
-      }
-    });
+    const startIdx = page * POSTS_PER_PAGE;
+    const endIdx = startIdx + POSTS_PER_PAGE;
+    const newPosts = allPosts.slice(startIdx, endIdx);
 
-    setDisplayedPosts(postsWithAds);
-  }, [getAllPosts]);
-
-  // Create or edit post via API with media upload
-  const handlePostSubmit = async (
-    content: string,
-    mediaFiles: File[],
-    tag?: PostTag,
-  ) => {
-    if (!isAuthenticated) {
-      toast({
-        title: 'Authentication required',
-        description: 'Please log in to create posts',
-        variant: 'destructive',
-      });
+    if (newPosts.length === 0) {
+      setHasMore(false);
       return;
     }
 
-    setIsCreatingPost(true);
+    // Insert ads every 8 posts (use real ads if available)
+    const adsToUse = feedAds.length > 0 ? feedAds : mockAds;
+    const postsWithAds: (Post | Ad)[] = [];
+    newPosts.forEach((post, idx) => {
+      postsWithAds.push(post);
+      // Add ad after every 8 posts (less intrusive)
+      if ((startIdx + idx + 1) % 8 === 0 && adsToUse.length > 0) {
+        const adIndex = Math.floor((startIdx + idx) / 8) % adsToUse.length;
+        postsWithAds.push(adsToUse[adIndex]);
+      }
+    });
 
+    setDisplayedPosts((prev) => [...prev, ...postsWithAds]);
+    setPage((prev) => prev + 1);
+  };
+
+  // Create or edit post
+  const handlePostSubmit = async (
+    content: string,
+    media: { type: 'image' | 'video'; url: string } | null,
+    tag?: string,
+  ) => {
+    // Prevent any potential page refresh by ensuring this is async and handled
     try {
       if (editingPost) {
-        // Edit existing post via API - include tag in the update
-        const updatedPost = await feedService.updatePost(editingPost.id, { 
-          content,
-          tag: tag || undefined,
-        });
+        // Edit existing post via API
+        try {
+          const updateData = {
+            content,
+            media_url: media?.type === 'image' ? media.url : undefined,
+            video_url: media?.type === 'video' ? media.url : undefined,
+            thumbnail_url: media?.type === 'video' ? media.url : undefined,
+            tag: tag,
+          };
+          
+          await apiClient.updatePost(editingPost.id.toString(), updateData);
+          
+          // Update local state
+          setUserPosts((prev) =>
+            prev.map((post) =>
+              post.id === editingPost.id
+                ? {
+                    ...post,
+                    content,
+                    type: media?.type || 'text',
+                    media: media?.type === 'image' ? media.url : undefined,
+                    thumbnail: media?.type === 'video' ? media.url : undefined,
+                    videoUrl: media?.type === 'video' ? media.url : undefined,
+                    tag: tag as Post['tag'],
+                  }
+                : post,
+            ),
+          );
 
-        // Upload new media files if any
-        let uploadedMedia: PostMedia[] = [];
-        if (mediaFiles.length > 0) {
-          try {
-            uploadedMedia = await feedService.uploadMultipleMedia(
-              editingPost.id,
-              mediaFiles,
-              (progress) => {
-                // Could show progress in UI if needed
-                console.log('Upload progress:', progress);
+          // Also update in displayed posts
+          setDisplayedPosts((prev) =>
+            prev.map((item) => {
+              if ('id' in item && item.id === editingPost.id) {
+                return {
+                  ...item,
+                  content,
+                  type: media?.type || 'text',
+                  media: media?.type === 'image' ? media.url : undefined,
+                  thumbnail: media?.type === 'video' ? media.url : undefined,
+                  videoUrl: media?.type === 'video' ? media.url : undefined,
+                  tag: tag as Post['tag'],
+                } as Post;
               }
-            );
-          } catch (uploadErr) {
-            console.error('Media upload failed:', uploadErr);
-            toast({
-              title: 'Media upload failed',
-              description: 'Post was updated but some media failed to upload',
-              variant: 'destructive',
-            });
-          }
+              return item;
+            }),
+          );
+
+          toast({
+            title: 'Post updated!',
+            description: 'Your post has been updated successfully',
+          });
+          setIsModalOpen(false);
+          setEditingPost(null);
+        } catch (error: any) {
+          console.error('Error updating post:', error);
+          toast({
+            title: 'Error',
+            description: error.message || 'Failed to update post',
+            variant: 'destructive',
+          });
         }
-
-        // Re-fetch the post to get updated media
-        const refreshedPost = await feedService.getPost(editingPost.id);
-        
-        // Update the post in local state with refreshed data
-        setApiPosts((prev) =>
-          prev.map((post) =>
-            post.id === editingPost.id
-              ? mapApiPostToPost(refreshedPost)
-              : post,
-          ),
-        );
-
-        toast({
-          title: 'Post updated!',
-          description: 'Your post has been updated successfully',
-        });
-        setEditingPost(null);
       } else {
-        // Create new post via API - include tag
-        const createdPost = await feedService.createPost({ 
+        // Create new post via API
+        const postData = {
+          type: media?.type || 'text',
           content,
-          tag: tag || undefined,
-        });
-
-        // Upload media files if any
-        let uploadedMedia: PostMedia[] = [];
-        if (mediaFiles.length > 0) {
-          try {
-            uploadedMedia = await feedService.uploadMultipleMedia(
-              createdPost.id,
-              mediaFiles,
-              (progress) => {
-                // Could show progress in UI if needed
-                console.log('Upload progress:', progress);
-              }
-            );
-          } catch (uploadErr) {
-            console.error('Media upload failed:', uploadErr);
-            toast({
-              title: 'Media upload partially failed',
-              description: 'Post was created but some media failed to upload',
-              variant: 'destructive',
-            });
-          }
-        }
-
-        // Create the new post with uploaded media
-        const firstMedia = uploadedMedia[0];
-        const newPost: Post = {
-          ...mapApiPostToPost(createdPost),
-          // Update type and media based on uploaded files
-          type: firstMedia 
-            ? (firstMedia.media_type === 'image' ? 'image' : 'video') 
-            : 'text',
-          media: firstMedia?.media_type === 'image' 
-            ? getMediaUrl(firstMedia.media_url) 
-            : undefined,
-          videoUrl: firstMedia?.media_type === 'video' 
-            ? getMediaUrl(firstMedia.media_url) 
-            : undefined,
-          thumbnail: firstMedia?.thumbnail_url 
-            ? getMediaUrl(firstMedia.thumbnail_url) 
-            : undefined,
-          apiMedia: uploadedMedia.length > 0 ? uploadedMedia : undefined,
-          // Override tag from mapApiPostToPost if we have a local tag
-          tag: tag ? apiToFrontendTag[tag] : (createdPost.tag ? apiToFrontendTag[createdPost.tag] : undefined),
-          apiTag: tag || createdPost.tag,
+          media_url: media?.type === 'image' ? media.url : undefined,
+          video_url: media?.type === 'video' ? media.url : undefined,
+          thumbnail_url: media?.type === 'video' ? media.url : undefined,
+          tag: tag,
         };
         
-        setApiPosts((prev) => [newPost, ...prev]);
-        
-        toast({
-          title: 'Post created!',
-          description: mediaFiles.length > 0 
-            ? 'Your post with media has been shared with the network'
-            : 'Your post has been shared with the network',
-        });
+        try {
+          const newPost = await apiClient.createPost(postData);
+          toast({
+            title: 'Post created!',
+            description: 'Your post has been shared successfully',
+          });
+          // Close modal
+          setIsModalOpen(false);
+          setEditingPost(null);
+          
+          // Format the new post to match Post interface
+          const formatTime = (dateString: string) => {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now.getTime() - date.getTime();
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            if (days < 7) return `${days}d ago`;
+            return date.toLocaleDateString();
+          };
+          
+          // Create formatted post from API response
+          const formattedNewPost: Post = {
+            id: newPost.id,
+            type: (newPost.type || 'text') as Post['type'],
+            author: newPost.author?.name || user?.name || 'You',
+            avatar: newPost.author?.avatar || user?.avatar || '',
+            university: newPost.author?.university || user?.university || '',
+            year: newPost.author?.graduation_year?.toString() || user?.graduation_year?.toString() || '',
+            content: newPost.content || content,
+            media: newPost.media_url || undefined,
+            videoUrl: newPost.video_url || undefined,
+            thumbnail: newPost.thumbnail_url || undefined,
+            likes: newPost.likes_count || 0,
+            comments: newPost.comments_count || 0,
+            time: formatTime(newPost.created_at || new Date().toISOString()),
+            tag: newPost.tag as Post['tag'],
+            jobTitle: newPost.job_title,
+            company: newPost.company,
+            location: newPost.location,
+            canEdit: newPost.can_edit ?? true,  // Creator can always edit their own post
+            canDelete: newPost.can_delete ?? true,  // Creator can always delete their own post
+          };
+          
+          // Prepend new post to existing posts (don't clear the feed)
+          setDisplayedPosts((prev) => {
+            // Remove any ads at the start, add new post, then re-add ads
+            const postsOnly = prev.filter((item) => 'id' in item) as Post[];
+            const newPosts = [formattedNewPost, ...postsOnly];
+            
+            // Re-add ads every 8 posts
+            const postsWithAds: (Post | Ad)[] = [];
+            newPosts.forEach((post, idx) => {
+              postsWithAds.push(post);
+              if ((idx + 1) % 8 === 0) {
+                const adIndex = Math.floor(idx / 8) % mockAds.length;
+                postsWithAds.push(mockAds[adIndex]);
+              }
+            });
+            
+            return postsWithAds;
+          });
+          
+          // Also add to userPosts for consistency
+          setUserPosts((prev) => [formattedNewPost, ...prev]);
+          
+          // Update cache with new post
+          const cachedPosts = getCachedPosts() || [];
+          setCachedPosts([formattedNewPost, ...cachedPosts]);
+        } catch (error: any) {
+          console.error('Error creating post:', error);
+          
+          // Handle 401 - session expired
+          if (error.message?.includes('401') || 
+              error.message?.includes('Unauthorized') || 
+              error.message?.includes('Session expired')) {
+            toast({
+              title: 'Session Expired',
+              description: 'Please login again to continue.',
+              variant: 'destructive',
+            });
+            // Clear token and redirect to login
+            apiClient.logout();
+            setTimeout(() => navigate('/login'), 2000);
+            return;
+          }
+          
+          toast({
+            title: 'Error',
+            description: error.message || 'Failed to create post',
+            variant: 'destructive',
+          });
+        }
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save post';
+    } catch (error: any) {
+      // Catch any unexpected errors to prevent page refresh
+      console.error('Unexpected error in handlePostSubmit:', error);
       toast({
-        title: editingPost ? 'Failed to update post' : 'Failed to create post',
-        description: errorMessage,
+        title: 'Error',
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
-    } finally {
-      setIsCreatingPost(false);
     }
   };
 
-  // Delete post with confirmation via API
-  const handleDeletePost = async (postId: number, e?: React.MouseEvent) => {
+  // Delete post with confirmation
+  const handleDeletePost = async (postId: string, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
     }
@@ -892,59 +855,38 @@ const Dashboard = () => {
       'Are you sure you want to delete this post? This action cannot be undone.',
     );
 
-    if (!confirmed) return;
-
-    setIsDeletingPost(postId);
-
-    try {
-      await feedService.deletePost(postId);
-      
-      // Remove from local state
-      setApiPosts((prev) => prev.filter((post) => post.id !== postId));
-      
-      toast({
-        title: 'Post deleted',
-        description: 'Your post has been removed',
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete post';
-      toast({
-        title: 'Failed to delete post',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsDeletingPost(null);
+    if (confirmed) {
+      try {
+        await apiClient.deletePost(postId.toString());
+        setUserPosts((prev) => prev.filter((post) => post.id !== postId));
+        setDisplayedPosts((prev) =>
+          prev.filter((item) => !('id' in item && item.id === postId)),
+        );
+        toast({
+          title: 'Post deleted',
+          description: 'The post has been removed',
+        });
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to delete post',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
-  // Edit post - only allow editing own posts
+  // Edit post
   const handleEditPost = (post: Post) => {
-    if (!isAuthenticated) {
-      toast({
-        title: 'Authentication required',
-        description: 'Please log in to edit posts',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Use apiTag if available, otherwise convert frontend tag to API format
-    const tagForEdit = post.apiTag || (post.tag ? frontendToApiTag[post.tag] : undefined);
-
-    // Convert API media to the format expected by PostModal
-    const existingMedia = post.apiMedia?.map(m => ({
-      id: m.id,
-      type: m.media_type as 'image' | 'video',
-      url: getMediaUrl(m.media_url),
-      postId: post.id,
-    }));
-
     setEditingPost({
       id: post.id,
       content: post.content,
-      existingMedia,
-      tag: tagForEdit,
+      media: post.media
+        ? { type: 'image', url: post.media }
+        : post.videoUrl
+        ? { type: 'video', url: post.videoUrl }
+        : undefined,
+      tag: post.tag,
     });
     setIsModalOpen(true);
   };
@@ -1008,26 +950,203 @@ const Dashboard = () => {
     return result;
   };
 
-  // Handle filter changes - refetch from API with new filters
+  // Handle filter changes - reset feed
   const handleFilterChange = (newFilters: FilterOptions) => {
     setFilters(newFilters);
-    // Reset and refetch with new filters
-    setPage(1);
+    setDisplayedPosts([]);
+    setPage(0);
     setHasMore(true);
-    fetchPosts(1, true, newFilters);
   };
 
-  // Initial load
-  useEffect(() => {
-    fetchPosts(1, true);
-  }, []);
+  // Load ads from API
+  const loadAds = async () => {
+    if (adsLoaded) return;
+    
+    try {
+      const adsResponse = await apiClient.getAdsForUser();
+      
+      // Convert PublicAdResponse to Ad format
+      const convertAd = (ad: PublicAdResponse): Ad => ({
+        id: ad.id,
+        image: ad.media_url,
+        title: ad.title,
+        description: ad.description || '',
+        link: ad.link_url || '#',
+        media_type: ad.media_type,
+      });
+      
+      setFeedAds(adsResponse.feed_ads.map(convertAd));
+      setLeftSidebarAds(adsResponse.left_sidebar_ads.map(convertAd));
+      setRightSidebarAds(adsResponse.right_sidebar_ads.map(convertAd));
+      setAdsLoaded(true);
+      console.log(`Loaded ads: ${adsResponse.feed_ads.length} feed, ${adsResponse.left_sidebar_ads.length} left, ${adsResponse.right_sidebar_ads.length} right`);
+    } catch (error) {
+      console.error('Failed to load ads:', error);
+      // Fall back to mock ads if API fails
+      setFeedAds(mockAds);
+      setLeftSidebarAds(compactAds.slice(0, 1).map(a => ({ ...a, link: '#' })));
+      setRightSidebarAds(compactAds.slice(1, 2).map(a => ({ ...a, link: '#' })));
+      setAdsLoaded(true);
+    }
+  };
+  
+  // Track ad impression
+  const trackAdImpression = async (adId: string) => {
+    if (trackedImpressions.current.has(adId)) return;
+    
+    trackedImpressions.current.add(adId);
+    try {
+      await apiClient.recordUserAdImpression(adId);
+    } catch (error) {
+      console.error('Failed to track ad impression:', error);
+    }
+  };
+  
+  // Track ad click
+  const handleAdClick = async (ad: Ad) => {
+    try {
+      await apiClient.recordUserAdClick(ad.id);
+    } catch (error) {
+      console.error('Failed to track ad click:', error);
+    }
+    if (ad.link && ad.link !== '#') {
+      window.open(ad.link, '_blank');
+    }
+  };
 
+  // Initial load - fetch from API (always load on mount)
+  useEffect(() => {
+    // Load ads
+    loadAds();
+    
+    // Always load posts when component mounts (component remounts on navigation)
+    const loadInitialPosts = async () => {
+      // Check for cached posts first
+      const cachedPosts = getCachedPosts();
+      const hasActiveFilters = Object.keys(filters).some(key => {
+        const filterValue = filters[key as keyof FilterOptions];
+        return Array.isArray(filterValue) ? filterValue.length > 0 : Boolean(filterValue);
+      });
+      
+      // If we have cached posts and no filters, show them immediately
+      if (cachedPosts && cachedPosts.length > 0 && !hasActiveFilters) {
+        const postsWithAds: (Post | Ad)[] = [];
+        cachedPosts.forEach((post, idx) => {
+          postsWithAds.push(post);
+          if ((idx + 1) % 8 === 0) {
+            const adIndex = Math.floor(idx / 8) % mockAds.length;
+            postsWithAds.push(mockAds[adIndex]);
+          }
+        });
+        setDisplayedPosts(postsWithAds);
+        setIsLoading(false);
+        setIsRefreshing(true); // Show small refresh indicator
+      } else if (displayedPosts.length === 0) {
+        setIsLoading(true); // Show full loading if no cached data
+      }
+      
+      // Reset postsLoaded when filters change to force reload
+      if (hasActiveFilters) {
+        setPostsLoaded(false); // Reset to force reload when filters change
+        setIsLoading(true);
+      }
+      
+      try {
+        console.log('Loading posts from API...');
+        const postsResponse = await apiClient.getPosts(1, POSTS_PER_PAGE);
+        const apiPosts = postsResponse.posts || [];
+        
+        // Format API posts to match Post interface
+        const formatTime = (dateString: string) => {
+          const date = new Date(dateString);
+          const now = new Date();
+          const diff = now.getTime() - date.getTime();
+          const minutes = Math.floor(diff / 60000);
+          const hours = Math.floor(diff / 3600000);
+          const days = Math.floor(diff / 86400000);
+          
+          if (minutes < 1) return 'Just now';
+          if (minutes < 60) return `${minutes}m ago`;
+          if (hours < 24) return `${hours}h ago`;
+          if (days < 7) return `${days}d ago`;
+          return date.toLocaleDateString();
+        };
+        
+        const formattedPosts: Post[] = apiPosts.map((p: any) => ({
+          id: p.id,
+          type: p.type || 'text',
+          author: p.author?.name || 'Unknown',
+          avatar: p.author?.avatar || '',
+          university: p.author?.university || '',
+          year: p.author?.graduation_year?.toString() || '',
+          content: p.content || '',
+          media: p.media_url || undefined,  // Map media_url to media for display
+          videoUrl: p.video_url || undefined,
+          thumbnail: p.thumbnail_url || undefined,
+          likes: p.likes_count || 0,
+          comments: p.comments_count || 0,
+          time: formatTime(p.created_at || new Date().toISOString()),
+          tag: p.tag as Post['tag'],
+          jobTitle: p.job_title,
+          company: p.company,
+          location: p.location,
+          canEdit: p.can_edit ?? false,
+          canDelete: p.can_delete ?? false,
+        }));
+        
+        // Cache the posts (only if no filters)
+        if (!hasActiveFilters && formattedPosts.length > 0) {
+          setCachedPosts(formattedPosts);
+        }
+        
+        // Set initial liked posts from API response
+        const likedPostIds = new Set<string>();
+        apiPosts.forEach((p: any) => {
+          if (p.is_liked) {
+            likedPostIds.add(p.id);
+          }
+        });
+        setLikedPosts(likedPostIds);
+        
+        // Add ads every 8 posts (use real ads if available, fallback to mock)
+        const postsWithAds: (Post | Ad)[] = [];
+        const adsToUse = feedAds.length > 0 ? feedAds : mockAds;
+        formattedPosts.forEach((post, idx) => {
+          postsWithAds.push(post);
+          if ((idx + 1) % 8 === 0 && adsToUse.length > 0) {
+            const adIndex = Math.floor(idx / 8) % adsToUse.length;
+            postsWithAds.push(adsToUse[adIndex]);
+          }
+        });
+        
+        console.log(`Loaded ${formattedPosts.length} posts from API`);
+        setDisplayedPosts(postsWithAds);
+        setPage(1);
+        setHasMore(postsResponse.total > POSTS_PER_PAGE);
+        setPostsLoaded(true); // Mark as loaded
+      } catch (error) {
+        console.error('Failed to load posts from API:', error);
+        // Only fallback to mock data if we truly have no posts
+        if (displayedPosts.length === 0) {
+          console.log('Falling back to mock data');
+          loadMorePosts();
+          setPostsLoaded(true); // Mark as loaded even if using mock data
+        }
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    };
+    
+    loadInitialPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]); // Run on mount and when filters change
 
   // Infinite scroll observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) {
+        if (entries[0].isIntersecting && hasMore) {
           loadMorePosts();
         }
       },
@@ -1039,26 +1158,12 @@ const Dashboard = () => {
     }
 
     return () => observer.disconnect();
-  }, [hasMore, isLoading, loadMorePosts]);
+  }, [hasMore, page, userPosts, searchQuery]);
 
-  // Toggle like via API
-  const toggleLike = async (postId: number) => {
-    if (!isAuthenticated) {
-      toast({
-        title: 'Authentication required',
-        description: 'Please log in to like posts',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Prevent double-clicking
-    if (likingPosts.has(postId)) return;
-
-    setLikingPosts(prev => new Set(prev).add(postId));
-
-    // Optimistic update
-    const wasLiked = likedPosts.has(postId);
+  const toggleLike = async (postId: string) => {
+    const isCurrentlyLiked = likedPosts.has(postId);
+    
+    // Optimistically update UI
     setLikedPosts((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(postId)) {
@@ -1069,67 +1174,52 @@ const Dashboard = () => {
       return newSet;
     });
 
-    // Update like count optimistically
-    setApiPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId
-          ? { ...post, likes: post.likes + (wasLiked ? -1 : 1) }
-          : post,
-      ),
-    );
-
     try {
-      const response = await feedService.toggleLike(postId);
-      
-      // Verify the response matches our optimistic update
-      if (response.liked !== !wasLiked) {
-        // Server state differs, revert to server state
-        setLikedPosts((prev) => {
-          const newSet = new Set(prev);
-          if (response.liked) {
-            newSet.add(postId);
-          } else {
-            newSet.delete(postId);
-          }
-          return newSet;
-        });
+      if (isCurrentlyLiked) {
+        const response = await apiClient.unlikePost(postId);
+        // Update the post's like count from server response
+        setDisplayedPosts((prev) =>
+          prev.map((item) => {
+            if ('id' in item && item.id === postId) {
+              return { ...item, likes: response.likes_count } as Post;
+            }
+            return item;
+          })
+        );
+      } else {
+        const response = await apiClient.likePost(postId);
+        // Update the post's like count from server response
+        setDisplayedPosts((prev) =>
+          prev.map((item) => {
+            if ('id' in item && item.id === postId) {
+              return { ...item, likes: response.likes_count } as Post;
+            }
+            return item;
+          })
+        );
       }
-    } catch (err) {
+    } catch (error: any) {
       // Revert optimistic update on error
       setLikedPosts((prev) => {
         const newSet = new Set(prev);
-        if (wasLiked) {
-          newSet.add(postId);
+        if (isCurrentlyLiked) {
+          newSet.add(postId); // Re-add if we were trying to unlike
         } else {
-          newSet.delete(postId);
+          newSet.delete(postId); // Remove if we were trying to like
         }
         return newSet;
       });
       
-      setApiPosts((prev) =>
-        prev.map((post) =>
-          post.id === postId
-            ? { ...post, likes: post.likes + (wasLiked ? 1 : -1) }
-            : post,
-        ),
-      );
-
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update like';
+      console.error('Failed to toggle like:', error);
       toast({
         title: 'Error',
-        description: errorMessage,
+        description: error.message || 'Failed to update like',
         variant: 'destructive',
-      });
-    } finally {
-      setLikingPosts(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(postId);
-        return newSet;
       });
     }
   };
 
-  const toggleComments = (postId: number) => {
+  const toggleComments = (postId: string) => {
     setExpandedComments((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(postId)) {
@@ -1141,9 +1231,19 @@ const Dashboard = () => {
     });
   };
 
-  const handleCommentAdded = (postId: number) => {
-    // Update comment count in API posts
-    setApiPosts((prev) =>
+  const handleCommentAdded = (postId: string) => {
+    // Update comment count in displayed posts
+    setDisplayedPosts((prev) =>
+      prev.map((item) => {
+        if ('id' in item && item.id === postId && 'comments' in item) {
+          return { ...item, comments: item.comments + 1 } as Post;
+        }
+        return item;
+      }),
+    );
+
+    // Update in user posts if applicable
+    setUserPosts((prev) =>
       prev.map((post) =>
         post.id === postId ? { ...post, comments: post.comments + 1 } : post,
       ),
@@ -1256,18 +1356,18 @@ const Dashboard = () => {
   };
 
   const renderPost = (post: Post) => {
+    // Check if post was liked (either from local state or from API)
     const isLiked = likedPosts.has(post.id);
+    // Don't add 1 to likes - the API returns the actual count
     const displayLikes = post.likes;
-    // Check if user owns this post (by author_id or author name match)
-    const isUserPost = (post.author_id && user?.id && String(post.author_id) === user.id) || 
-                       post.author === user?.name || 
-                       post.author === 'You';
+    const isUserPost = userPosts.some((p) => p.id === post.id);
+    // Use API permissions - fallback to local check for user's own posts
+    const canEditPost = post.canEdit ?? isUserPost;
+    const canDeletePost = post.canDelete ?? isUserPost;
     const showComments = expandedComments.has(post.id);
     const isCopied = copiedPostId === post.id;
     const tagInfo = getTagInfo(post.tag);
     const hasTag = !!tagInfo;
-    const isLiking = likingPosts.has(post.id);
-    const isDeleting = isDeletingPost === post.id;
 
     return (
       <Card
@@ -1320,7 +1420,7 @@ const Dashboard = () => {
                 </p>
               </div>
             </div>
-            {isUserPost ? (
+            {(canEditPost || canDeletePost) ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -1335,26 +1435,30 @@ const Dashboard = () => {
                   align="end"
                   className="w-48"
                 >
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditPost(post);
-                    }}
-                    className="gap-2 cursor-pointer"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit Post</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeletePost(post.id, e);
-                    }}
-                    className="gap-2 text-destructive focus:text-destructive cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Delete Post</span>
-                  </DropdownMenuItem>
+                  {canEditPost && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditPost(post);
+                      }}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <Edit className="w-4 h-4" />
+                      <span>Edit Post</span>
+                    </DropdownMenuItem>
+                  )}
+                  {canDeletePost && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeletePost(post.id, e);
+                      }}
+                      className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete Post</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
@@ -1412,18 +1516,20 @@ const Dashboard = () => {
           </div>
         )}
 
-        {post.type === 'video' && post.videoUrl && (
-          <div className="relative w-full bg-muted">
-            <video
-              src={post.videoUrl}
-              poster={post.thumbnail}
+        {post.type === 'video' && post.thumbnail && (
+          <div className="relative w-full group cursor-pointer bg-muted">
+            <img
+              src={post.thumbnail}
+              alt="Video thumbnail"
+              onError={handleImageError}
               className="w-full object-cover max-h-[450px]"
-              controls
-              preload="metadata"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Your browser does not support the video tag.
-            </video>
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition-colors">
+              <div className="w-20 h-20 rounded-full bg-white/95 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                <Play className="w-10 h-10 text-primary ml-1" />
+              </div>
+            </div>
           </div>
         )}
 
@@ -1433,23 +1539,22 @@ const Dashboard = () => {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 ${
-                      isLiked
-                        ? 'text-red-500 hover:text-red-600'
-                        : 'hover:text-red-600 dark:hover:text-red-400'
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleLike(post.id);
-                    }}
-                    disabled={isLiking}
-                  >
-                    <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''} ${isLiking ? 'animate-pulse' : ''}`} />
-                    <span className="text-sm font-medium">{displayLikes}</span>
-                  </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 ${
+                isLiked
+                  ? 'text-red-500 hover:text-red-600'
+                  : 'hover:text-red-600 dark:hover:text-red-400'
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleLike(post.id);
+              }}
+            >
+              <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
+              <span className="text-sm font-medium">{displayLikes}</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -1559,6 +1664,14 @@ const Dashboard = () => {
   };
 
   const renderAd = (ad: Ad) => {
+    // Track impression when ad is first rendered (using ref to prevent duplicates)
+    if (!trackedImpressions.current.has(ad.id)) {
+      trackedImpressions.current.add(ad.id);
+      apiClient.recordUserAdImpression(ad.id).catch(err => 
+        console.error('Failed to track ad impression:', err)
+      );
+    }
+    
     return (
       <Card
         key={ad.id}
@@ -1568,13 +1681,19 @@ const Dashboard = () => {
           <Badge className="absolute top-3 right-3 z-10 bg-muted/80 text-muted-foreground text-xs font-normal backdrop-blur-sm">
             Sponsored
           </Badge>
-          <img
-            src={ad.image}
-            alt={ad.title}
-            onError={handleImageError}
-            className="w-full h-48 sm:h-56 object-cover opacity-90"
-            loading="lazy"
-          />
+          {ad.media_type === 'video' ? (
+            <div className="w-full h-48 sm:h-56 bg-black/10 flex items-center justify-center">
+              <Play className="w-12 h-12 text-muted-foreground" />
+            </div>
+          ) : (
+            <img
+              src={ad.image}
+              alt={ad.title}
+              onError={handleImageError}
+              className="w-full h-48 sm:h-56 object-cover opacity-90"
+              loading="lazy"
+            />
+          )}
         </div>
         <div className="p-4 sm:p-5">
           <h3 className="font-semibold text-base sm:text-lg mb-1.5">
@@ -1587,6 +1706,7 @@ const Dashboard = () => {
             className="w-full h-9 text-sm"
             variant="outline"
             size="sm"
+            onClick={() => handleAdClick(ad)}
           >
             Learn More
           </Button>
@@ -1607,6 +1727,9 @@ const Dashboard = () => {
     const today = new Date();
     return eventDate.toDateString() === today.toDateString();
   });
+
+  // Get the first non-dismissed today's event to show
+  const activeTodayEvent = todaysEvents.find((event) => !isEventDismissed(event.id));
 
   return (
     <div className="min-h-screen bg-background">
@@ -1757,36 +1880,45 @@ const Dashboard = () => {
                   e.stopPropagation();
                 }}
               >
-                {/* Compact Ad - TOP POSITION */}
-                {compactAds[0] && (
-                  <Card className="overflow-hidden border border-border/50 bg-card hover:shadow-md transition-all">
-                    <div className="relative">
-                      <Badge className="absolute top-2 right-2 z-10 bg-muted/80 text-muted-foreground text-[10px] font-normal backdrop-blur-sm">
-                        Sponsored
-                      </Badge>
-                      <img
-                        src={compactAds[0].image}
-                        alt={compactAds[0].title}
-                        className="w-full h-32 object-cover opacity-90"
-                      />
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-semibold text-sm mb-1">
-                        {compactAds[0].title}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {compactAds[0].description}
-                      </p>
-                      <Button
-                        className="w-full h-7 text-xs"
-                        variant="outline"
-                        size="sm"
-                      >
-                        Learn More
-                      </Button>
-                    </div>
-                  </Card>
-                )}
+                {/* Compact Ad - LEFT SIDEBAR */}
+                {(leftSidebarAds[0] || compactAds[0]) && (() => {
+                  const ad = leftSidebarAds[0] || { ...compactAds[0], link: '#' };
+                  // Track impression
+                  if (!trackedImpressions.current.has(ad.id)) {
+                    trackedImpressions.current.add(ad.id);
+                    apiClient.recordUserAdImpression(ad.id).catch(() => {});
+                  }
+                  return (
+                    <Card className="overflow-hidden border border-border/50 bg-card hover:shadow-md transition-all">
+                      <div className="relative">
+                        <Badge className="absolute top-2 right-2 z-10 bg-muted/80 text-muted-foreground text-[10px] font-normal backdrop-blur-sm">
+                          Sponsored
+                        </Badge>
+                        <img
+                          src={ad.image}
+                          alt={ad.title}
+                          className="w-full h-32 object-cover opacity-90"
+                        />
+                      </div>
+                      <div className="p-3">
+                        <h3 className="font-semibold text-sm mb-1">
+                          {ad.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {ad.description}
+                        </p>
+                        <Button
+                          className="w-full h-7 text-xs"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAdClick(ad)}
+                        >
+                          Learn More
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })()}
 
                 {/* Suggested Connections */}
                 <Card className="overflow-hidden">
@@ -1865,7 +1997,7 @@ const Dashboard = () => {
                 </div>
 
                 {/* Today's Event Reminder */}
-                {!dismissedEventReminder && todaysEvents.length > 0 && (
+                {activeTodayEvent && (
                   <Card className="overflow-hidden border-2 border-blue-500/50 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-blue-500/10 shadow-lg">
                     <div className="p-4 sm:p-5">
                       <div className="flex items-start justify-between gap-3">
@@ -1883,19 +2015,19 @@ const Dashboard = () => {
                               </span>
                             </div>
                             <h3 className="font-bold text-lg mb-1">
-                              {todaysEvents[0].title}
+                              {activeTodayEvent.title}
                             </h3>
                             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-2">
                               <div className="flex items-center gap-1">
                                 <MapPin className="w-4 h-4" />
-                                <span>{todaysEvents[0].location}</span>
+                                <span>{activeTodayEvent.location}</span>
                               </div>
                               <Badge variant="secondary">
-                                {todaysEvents[0].category}
+                                {activeTodayEvent.category}
                               </Badge>
                             </div>
                             <p className="text-sm text-muted-foreground line-clamp-2">
-                              {todaysEvents[0].description}
+                              {activeTodayEvent.description}
                             </p>
                             <Button
                               size="sm"
@@ -1909,7 +2041,7 @@ const Dashboard = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => setDismissedEventReminder(true)}
+                          onClick={() => dismissEventReminder(activeTodayEvent.id)}
                           className="h-8 w-8 flex-shrink-0 hover:bg-blue-500/20"
                           title="Dismiss reminder"
                         >
@@ -1993,63 +2125,27 @@ const Dashboard = () => {
                   </div>
                 )}
 
-                {/* Posts Feed */}
-                {/* Error State */}
-                {error && !isInitialLoading && (
-                  <Card className="p-6 text-center border-destructive">
-                    <div className="text-destructive mb-4">
-                      <svg
-                        className="w-12 h-12 mx-auto mb-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                      </svg>
-                      <p className="font-medium">Failed to load posts</p>
-                      <p className="text-sm text-muted-foreground mt-1">{error}</p>
-                    </div>
-                    <Button onClick={() => fetchPosts(1, true)} variant="outline">
-                      Try Again
-                    </Button>
-                  </Card>
+                {/* Refresh Indicator - Shows when refreshing with cached data */}
+                {isRefreshing && displayedPosts.length > 0 && (
+                  <div className="flex items-center justify-center gap-2 py-2 px-4 bg-primary/5 border border-primary/20 rounded-lg mb-4">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-muted-foreground">Checking for new posts...</span>
+                  </div>
                 )}
 
-                {/* Loading Skeleton */}
-                {isInitialLoading && (
-                  <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <Card key={i} className="p-5">
-                        <div className="flex gap-3 mb-4">
-                          <Skeleton className="w-12 h-12 rounded-full" />
-                          <div className="flex-1 space-y-2">
-                            <Skeleton className="h-4 w-32" />
-                            <Skeleton className="h-3 w-48" />
-                          </div>
-                        </div>
-                        <div className="space-y-2 mb-4">
-                          <Skeleton className="h-4 w-full" />
-                          <Skeleton className="h-4 w-full" />
-                          <Skeleton className="h-4 w-3/4" />
-                        </div>
-                        <Skeleton className="h-48 w-full rounded-lg" />
-                        <div className="flex gap-4 mt-4">
-                          <Skeleton className="h-8 w-20" />
-                          <Skeleton className="h-8 w-24" />
-                          <Skeleton className="h-8 w-16" />
-                        </div>
-                      </Card>
-                    ))}
+                {/* Initial Loading State */}
+                {isLoading && displayedPosts.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                    <div className="relative">
+                      <div className="w-16 h-16 border-4 border-muted rounded-full" />
+                      <div className="absolute inset-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                    <p className="text-muted-foreground text-sm">Loading posts...</p>
                   </div>
                 )}
 
                 {/* Posts Feed with Ads */}
-                {!isInitialLoading && !error && displayedPosts.map((item) => {
+                {displayedPosts.map((item) => {
                   if ('image' in item && 'title' in item) {
                     return renderAd(item as Ad);
                   }
@@ -2057,53 +2153,38 @@ const Dashboard = () => {
                 })}
 
                 {/* Loading Indicator */}
-                {hasMore && displayedPosts.length > 0 && !isInitialLoading && (
+                {hasMore && displayedPosts.length > 0 && (
                   <div
                     ref={observerTarget}
                     className="py-6 sm:py-8 text-center"
                   >
-                    {isLoading ? (
-                      <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Scroll for more</p>
-                    )}
+                    <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
 
-                {/* Empty State */}
-                {!isInitialLoading && !error && displayedPosts.length === 0 && (
-                  <Card className="p-8 text-center">
-                    <div className="text-muted-foreground">
-                      <svg
-                        className="w-16 h-16 mx-auto mb-4 opacity-50"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                        />
-                      </svg>
-                      <p className="text-lg font-medium mb-2">No posts yet</p>
-                      <p className="text-sm mb-4">Be the first to share something with the community!</p>
-                      {isAuthenticated && (
-                        <Button onClick={() => setIsModalOpen(true)}>
-                          Create Post
-                        </Button>
-                      )}
-                    </div>
-                  </Card>
-                )}
-
                 {/* End of Feed */}
-                {!hasMore && displayedPosts.length > 0 && !isInitialLoading && (
+                {!hasMore && !isLoading && displayedPosts.length > 0 && (
                   <Card className="p-4 sm:p-6 text-center">
                     <p className="text-sm sm:text-base text-muted-foreground">
                       You're all caught up! 🎉
                     </p>
+                  </Card>
+                )}
+
+                {/* Empty State */}
+                {!isLoading && displayedPosts.length === 0 && (
+                  <Card className="p-8 sm:p-12 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                      <MessageCircle className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">No posts yet</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Be the first to share something with the community!
+                    </p>
+                    <Button onClick={() => setIsModalOpen(true)}>
+                      <PlusCircle className="w-4 h-4 mr-2" />
+                      Create Post
+                    </Button>
                   </Card>
                 )}
               </div>
@@ -2116,36 +2197,45 @@ const Dashboard = () => {
                   e.stopPropagation();
                 }}
               >
-                {/* Compact Ad 2 - TOP POSITION */}
-                {compactAds[1] && (
-                  <Card className="overflow-hidden border border-border/50 bg-card hover:shadow-md transition-all">
-                    <div className="relative">
-                      <Badge className="absolute top-2 right-2 z-10 bg-muted/80 text-muted-foreground text-[10px] font-normal backdrop-blur-sm">
-                        Sponsored
-                      </Badge>
-                      <img
-                        src={compactAds[1].image}
-                        alt={compactAds[1].title}
-                        className="w-full h-32 object-cover opacity-90"
-                      />
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-semibold text-sm mb-1">
-                        {compactAds[1].title}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {compactAds[1].description}
-                      </p>
-                      <Button
-                        className="w-full h-7 text-xs"
-                        variant="outline"
-                        size="sm"
-                      >
-                        Learn More
-                      </Button>
-                    </div>
-                  </Card>
-                )}
+                {/* Compact Ad - RIGHT SIDEBAR */}
+                {(rightSidebarAds[0] || compactAds[1]) && (() => {
+                  const ad = rightSidebarAds[0] || { ...compactAds[1], link: '#' };
+                  // Track impression
+                  if (!trackedImpressions.current.has(ad.id)) {
+                    trackedImpressions.current.add(ad.id);
+                    apiClient.recordUserAdImpression(ad.id).catch(() => {});
+                  }
+                  return (
+                    <Card className="overflow-hidden border border-border/50 bg-card hover:shadow-md transition-all">
+                      <div className="relative">
+                        <Badge className="absolute top-2 right-2 z-10 bg-muted/80 text-muted-foreground text-[10px] font-normal backdrop-blur-sm">
+                          Sponsored
+                        </Badge>
+                        <img
+                          src={ad.image}
+                          alt={ad.title}
+                          className="w-full h-32 object-cover opacity-90"
+                        />
+                      </div>
+                      <div className="p-3">
+                        <h3 className="font-semibold text-sm mb-1">
+                          {ad.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {ad.description}
+                        </p>
+                        <Button
+                          className="w-full h-7 text-xs"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAdClick(ad)}
+                        >
+                          Learn More
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })()}
 
                 {/* University AI Assistant */}
                 <UniversityChatbot />
@@ -2289,36 +2379,45 @@ const Dashboard = () => {
                   </Card>
                 )}
 
-                {/* Compact Ad 2 */}
-                {compactAds[1] && (
-                  <Card className="overflow-hidden border border-border/50 bg-card hover:shadow-md transition-all">
-                    <div className="relative">
-                      <Badge className="absolute top-2 right-2 z-10 bg-muted/80 text-muted-foreground text-[10px] font-normal backdrop-blur-sm">
-                        Sponsored
-                      </Badge>
-                      <img
-                        src={compactAds[1].image}
-                        alt={compactAds[1].title}
-                        className="w-full h-32 object-cover opacity-90"
-                      />
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-semibold text-sm mb-1">
-                        {compactAds[1].title}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {compactAds[1].description}
-                      </p>
-                      <Button
-                        className="w-full h-7 text-xs"
-                        variant="outline"
-                        size="sm"
-                      >
-                        Learn More
-                      </Button>
-                    </div>
-                  </Card>
-                )}
+                {/* Compact Ad 2 - RIGHT SIDEBAR BOTTOM */}
+                {(rightSidebarAds[1] || compactAds[1]) && (() => {
+                  const ad = rightSidebarAds[1] || { ...compactAds[1], link: '#' };
+                  // Track impression
+                  if (!trackedImpressions.current.has(ad.id)) {
+                    trackedImpressions.current.add(ad.id);
+                    apiClient.recordUserAdImpression(ad.id).catch(() => {});
+                  }
+                  return (
+                    <Card className="overflow-hidden border border-border/50 bg-card hover:shadow-md transition-all">
+                      <div className="relative">
+                        <Badge className="absolute top-2 right-2 z-10 bg-muted/80 text-muted-foreground text-[10px] font-normal backdrop-blur-sm">
+                          Sponsored
+                        </Badge>
+                        <img
+                          src={ad.image}
+                          alt={ad.title}
+                          className="w-full h-32 object-cover opacity-90"
+                        />
+                      </div>
+                      <div className="p-3">
+                        <h3 className="font-semibold text-sm mb-1">
+                          {ad.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {ad.description}
+                        </p>
+                        <Button
+                          className="w-full h-7 text-xs"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAdClick(ad)}
+                        >
+                          Learn More
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })()}
               </aside>
             </div>
           </div>
@@ -2344,7 +2443,6 @@ const Dashboard = () => {
         }}
         onSubmit={handlePostSubmit}
         editPost={editingPost}
-        isSubmitting={isCreatingPost}
       />
 
       <MobileNav />

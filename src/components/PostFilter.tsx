@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Sheet,
@@ -10,11 +11,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Filter, X, Loader2 } from 'lucide-react';
+import { Filter, X, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { feedService } from '@/services/feedService';
-import { TagOption, UniversityOption, PostTag } from '@/types/feed';
-import { useToast } from '@/hooks/use-toast';
 
 interface PostFilterProps {
   onFilterChange: (filters: FilterOptions) => void;
@@ -23,8 +21,9 @@ interface PostFilterProps {
 
 export interface FilterOptions {
   postTypes: string[];
-  tags: PostTag[];
-  universities: number[]; // Changed to store university IDs
+  tags: string[];
+  universities: string[];
+  searchText: string;
 }
 
 const postTypes = [
@@ -35,56 +34,34 @@ const postTypes = [
   { value: 'announcement', label: 'Announcements' },
 ];
 
-// Tag icons mapping for display
-const tagIcons: Record<PostTag, string> = {
-  'success_story': '🏆',
-  'career_milestone': '📈',
-  'achievement': '⭐',
-  'learning_journey': '📚',
-  'volunteering': '❤️',
-};
+const postTags = [
+  { value: 'success-story', label: 'Success Story', icon: '🏆' },
+  { value: 'career-milestone', label: 'Career Milestone', icon: '📈' },
+  { value: 'achievement', label: 'Achievement', icon: '⭐' },
+  { value: 'learning', label: 'Learning Journey', icon: '📚' },
+  { value: 'volunteering', label: 'Volunteering', icon: '❤️' },
+];
+
+const universities = [
+  'MIT',
+  'Stanford',
+  'Harvard',
+  'Berkeley',
+  'Yale',
+  'Princeton',
+  'Cornell',
+  'Columbia',
+  'Duke',
+  'Northwestern',
+  'Penn',
+  'Brown',
+  'UCLA',
+];
 
 const PostFilter = ({ onFilterChange, activeFilters }: PostFilterProps) => {
-  const { toast } = useToast();
-  const [localFilters, setLocalFilters] = useState<FilterOptions>(activeFilters);
+  const [localFilters, setLocalFilters] =
+    useState<FilterOptions>(activeFilters);
   const [isOpen, setIsOpen] = useState(false);
-  
-  // API filter options state
-  const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
-  const [universityOptions, setUniversityOptions] = useState<UniversityOption[]>([]);
-  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
-  const [optionsError, setOptionsError] = useState<string | null>(null);
-
-  // Fetch filter options when sheet opens
-  useEffect(() => {
-    if (isOpen && tagOptions.length === 0) {
-      fetchFilterOptions();
-    }
-  }, [isOpen]);
-
-  const fetchFilterOptions = async () => {
-    setIsLoadingOptions(true);
-    setOptionsError(null);
-    
-    try {
-      const options = await feedService.getFilterOptions();
-      setTagOptions(options.tags);
-      setUniversityOptions(options.universities);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load filter options';
-      setOptionsError(errorMessage);
-      // Use fallback options if API fails
-      setTagOptions([
-        { value: 'success_story', label: 'Success Story' },
-        { value: 'career_milestone', label: 'Career Milestone' },
-        { value: 'achievement', label: 'Achievement' },
-        { value: 'learning_journey', label: 'Learning Journey' },
-        { value: 'volunteering', label: 'Volunteering' },
-      ]);
-    } finally {
-      setIsLoadingOptions(false);
-    }
-  };
 
   const handleTogglePostType = (type: string) => {
     const newTypes = localFilters.postTypes.includes(type)
@@ -93,32 +70,23 @@ const PostFilter = ({ onFilterChange, activeFilters }: PostFilterProps) => {
     setLocalFilters({ ...localFilters, postTypes: newTypes });
   };
 
-  const handleToggleTag = (tag: PostTag) => {
+  const handleToggleTag = (tag: string) => {
     const newTags = localFilters.tags.includes(tag)
       ? localFilters.tags.filter((t) => t !== tag)
       : [...localFilters.tags, tag];
     setLocalFilters({ ...localFilters, tags: newTags });
   };
 
-  const handleToggleUniversity = (universityId: number) => {
-    const newUniversities = localFilters.universities.includes(universityId)
-      ? localFilters.universities.filter((u) => u !== universityId)
-      : [...localFilters.universities, universityId];
+  const handleToggleUniversity = (university: string) => {
+    const newUniversities = localFilters.universities.includes(university)
+      ? localFilters.universities.filter((u) => u !== university)
+      : [...localFilters.universities, university];
     setLocalFilters({ ...localFilters, universities: newUniversities });
   };
 
   const handleApplyFilters = () => {
     onFilterChange(localFilters);
     setIsOpen(false);
-    
-    // Show feedback if filters are applied
-    const filterCount = activeFilterCount;
-    if (filterCount > 0) {
-      toast({
-        title: 'Filters applied',
-        description: `${filterCount} filter${filterCount > 1 ? 's' : ''} active`,
-      });
-    }
   };
 
   const handleClearFilters = () => {
@@ -126,27 +94,23 @@ const PostFilter = ({ onFilterChange, activeFilters }: PostFilterProps) => {
       postTypes: [],
       tags: [],
       universities: [],
+      searchText: '',
     };
     setLocalFilters(emptyFilters);
     onFilterChange(emptyFilters);
-    toast({
-      title: 'Filters cleared',
-      description: 'All filters have been removed',
-    });
   };
-
-  // Sync local filters with active filters when they change externally
-  useEffect(() => {
-    setLocalFilters(activeFilters);
-  }, [activeFilters]);
 
   const activeFilterCount =
     localFilters.postTypes.length +
     localFilters.tags.length +
-    localFilters.universities.length;
+    localFilters.universities.length +
+    (localFilters.searchText ? 1 : 0);
 
   return (
-    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+    <Sheet
+      open={isOpen}
+      onOpenChange={setIsOpen}
+    >
       <SheetTrigger asChild>
         <Button
           variant="outline"
@@ -166,104 +130,101 @@ const PostFilter = ({ onFilterChange, activeFilters }: PostFilterProps) => {
         <SheetHeader>
           <SheetTitle className="text-xl font-bold">Filter Posts</SheetTitle>
           <SheetDescription>
-            Refine your feed by post type, tags, and university
+            Refine your feed by post type, tags, university, and more
           </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-6 py-6">
-          {/* Loading State */}
-          {isLoadingOptions && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-sm text-muted-foreground">Loading filters...</span>
+          {/* Search Text */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Search in Posts</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search keywords..."
+                value={localFilters.searchText}
+                onChange={(e) =>
+                  setLocalFilters({
+                    ...localFilters,
+                    searchText: e.target.value,
+                  })
+                }
+                className="pl-9"
+              />
             </div>
-          )}
-
-          {/* Error State */}
-          {optionsError && (
-            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-              <p className="text-sm text-destructive">{optionsError}</p>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={fetchFilterOptions}
-                className="mt-2 text-xs"
-              >
-                Retry
-              </Button>
-            </div>
-          )}
+          </div>
 
           {/* Post Types */}
-          {!isLoadingOptions && (
-            <>
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">Post Type</Label>
-                <div className="space-y-2">
-                  {postTypes.map((type) => (
-                    <div key={type.value} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`type-${type.value}`}
-                        checked={localFilters.postTypes.includes(type.value)}
-                        onCheckedChange={() => handleTogglePostType(type.value)}
-                      />
-                      <label
-                        htmlFor={`type-${type.value}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        {type.label}
-                      </label>
-                    </div>
-                  ))}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Post Type</Label>
+            <div className="space-y-2">
+              {postTypes.map((type) => (
+                <div
+                  key={type.value}
+                  className="flex items-center space-x-2"
+                >
+                  <Checkbox
+                    id={`type-${type.value}`}
+                    checked={localFilters.postTypes.includes(type.value)}
+                    onCheckedChange={() => handleTogglePostType(type.value)}
+                  />
+                  <label
+                    htmlFor={`type-${type.value}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    {type.label}
+                  </label>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
 
-              {/* Tags */}
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">Tags</Label>
-                <div className="flex flex-wrap gap-2">
-                  {tagOptions.map((tag) => (
-                    <Badge
-                      key={tag.value}
-                      variant={localFilters.tags.includes(tag.value) ? 'default' : 'outline'}
-                      className="cursor-pointer transition-all hover:scale-105"
-                      onClick={() => handleToggleTag(tag.value)}
-                    >
-                      <span className="mr-1">{tagIcons[tag.value] || '🏷️'}</span>
-                      {tag.label}
-                    </Badge>
-                  ))}
-                </div>
-                {tagOptions.length === 0 && !isLoadingOptions && (
-                  <p className="text-xs text-muted-foreground">No tags available</p>
-                )}
-              </div>
+          {/* Tags */}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Tags</Label>
+            <div className="flex flex-wrap gap-2">
+              {postTags.map((tag) => (
+                <Badge
+                  key={tag.value}
+                  variant={
+                    localFilters.tags.includes(tag.value)
+                      ? 'default'
+                      : 'outline'
+                  }
+                  className="cursor-pointer transition-all hover:scale-105"
+                  onClick={() => handleToggleTag(tag.value)}
+                >
+                  <span className="mr-1">{tag.icon}</span>
+                  {tag.label}
+                </Badge>
+              ))}
+            </div>
+          </div>
 
-              {/* Universities */}
-              {universityOptions.length > 0 && (
-                <div className="space-y-3">
-                  <Label className="text-sm font-semibold">University</Label>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                    {universityOptions.map((university) => (
-                      <div key={university.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`university-${university.id}`}
-                          checked={localFilters.universities.includes(university.id)}
-                          onCheckedChange={() => handleToggleUniversity(university.id)}
-                        />
-                        <label
-                          htmlFor={`university-${university.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {university.name}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
+          {/* Universities */}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">University</Label>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+              {universities.map((university) => (
+                <div
+                  key={university}
+                  className="flex items-center space-x-2"
+                >
+                  <Checkbox
+                    id={`university-${university}`}
+                    checked={localFilters.universities.includes(university)}
+                    onCheckedChange={() => handleToggleUniversity(university)}
+                  />
+                  <label
+                    htmlFor={`university-${university}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    {university}
+                  </label>
                 </div>
-              )}
-            </>
-          )}
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Action Buttons */}
@@ -277,7 +238,10 @@ const PostFilter = ({ onFilterChange, activeFilters }: PostFilterProps) => {
             <X className="w-4 h-4 mr-2" />
             Clear All
           </Button>
-          <Button onClick={handleApplyFilters} className="flex-1">
+          <Button
+            onClick={handleApplyFilters}
+            className="flex-1"
+          >
             Apply Filters
           </Button>
         </div>

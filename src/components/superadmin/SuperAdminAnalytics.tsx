@@ -123,6 +123,19 @@ const SuperAdminAnalytics = ({ detailed = false }: SuperAdminAnalyticsProps) => 
       {/* Per-University Stats */}
       <Card className="p-4">
         <h3 className="text-lg font-bold mb-4">University Breakdown</h3>
+        {stats.length === 0 ? (
+          <div className="py-8 text-center">
+            <div className="flex flex-col items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500/10 to-pink-500/10 flex items-center justify-center mb-4">
+                <Building2 className="w-7 h-7 text-purple-500/60" />
+              </div>
+              <h4 className="font-medium mb-1">No University Data</h4>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                Add universities to see their analytics breakdown here.
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-3">
           {stats.map(stat => (
             <Card key={stat.id} className="p-4">
@@ -151,6 +164,7 @@ const SuperAdminAnalytics = ({ detailed = false }: SuperAdminAnalyticsProps) => 
             </Card>
           ))}
         </div>
+        )}
       </Card>
     </div>
   );

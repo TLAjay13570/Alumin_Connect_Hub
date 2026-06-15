@@ -251,6 +251,30 @@ const SuperAdminUniversities = () => {
       </Card>
 
       {/* Universities Grid */}
+      {universityList.length === 0 ? (
+        <Card className="p-10 text-center border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+          <div className="flex flex-col items-center justify-center">
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                  <Building2 className="w-7 h-7 text-primary/60" />
+                </div>
+              </div>
+              <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
+                <Plus className="w-4 h-4 text-primary" />
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No Universities Yet</h3>
+            <p className="text-muted-foreground mb-6 max-w-md text-sm">
+              Add your first university to start managing alumni networks. Each university gets its own branding and user base.
+            </p>
+            <Button onClick={() => setIsModalOpen(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Add First University
+            </Button>
+          </div>
+        </Card>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {universityList.map(uni => (
           <Card key={uni.id} className="p-4 hover:shadow-lg transition-shadow">
@@ -309,6 +333,7 @@ const SuperAdminUniversities = () => {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Create/Edit Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => {

@@ -457,15 +457,23 @@ const MentorshipMatch = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                   {matches.length === 0 ? (
                     <div className="col-span-full flex items-center justify-center min-h-[400px]">
-                      <Card className="p-8 text-center max-w-md">
-                        <GraduationCap className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                        <h3 className="text-lg font-semibold mb-2">No matches yet</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Start swiping to find your perfect mentor!
-                        </p>
-                        <Button onClick={() => setActiveTab('discover')} size="sm">
-                          Start Matching
-                        </Button>
+                      <Card className="p-10 text-center max-w-md border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="relative mb-5">
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500/10 to-purple-500/5 flex items-center justify-center">
+                              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500/20 to-purple-500/10 flex items-center justify-center">
+                                <GraduationCap className="w-7 h-7 text-purple-500/60" />
+                              </div>
+                            </div>
+                          </div>
+                          <h3 className="text-lg font-semibold mb-2">No Matches Yet</h3>
+                          <p className="text-sm text-muted-foreground max-w-sm mb-5">
+                            Start swiping to find your perfect mentor! Each match brings you closer to valuable career guidance.
+                          </p>
+                          <Button onClick={() => setActiveTab('discover')} className="gap-2">
+                            Start Matching
+                          </Button>
+                        </div>
                       </Card>
                     </div>
                   ) : (

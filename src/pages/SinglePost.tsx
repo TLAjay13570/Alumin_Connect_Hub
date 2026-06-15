@@ -7,22 +7,29 @@ import CommentSection from '@/components/CommentSection';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Heart,
   MessageCircle,
   Share2,
+  MoreHorizontal,
   Briefcase,
   Megaphone,
+  Play,
   ArrowLeft,
+  Edit,
+  Trash2,
   Facebook,
   Twitter,
   Copy,
   Check,
   Menu,
+  Loader2,
+  FileText,
+  AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { apiClient } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,208 +37,153 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { feedService } from '@/services/feedService';
-import { ApiPost, PostTag, PostMedia } from '@/types/feed';
-
-// Helper to get API base URL for media
-const getMediaUrl = (url: string): string => {
-  if (url.startsWith('/media/')) {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://alumni-portal-yw7q.onrender.com';
-    return `${API_BASE_URL}${url}`;
-  }
-  return url;
-};
-
-// Tag display mapping - supports both API format (snake_case) and frontend format (kebab-case)
-const tagDisplayMap: Record<string, { label: string; color: string; icon: string }> = {
-  // API format (snake_case)
-  'success_story': {
-    label: 'Success Story',
-    color: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
-    icon: '🏆',
-  },
-  'career_milestone': {
-    label: 'Career Milestone',
-    color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-    icon: '📈',
-  },
-  'achievement': {
-    label: 'Achievement',
-    color: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
-    icon: '⭐',
-  },
-  'learning_journey': {
-    label: 'Learning Journey',
-    color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
-    icon: '📚',
-  },
-  'volunteering': {
-    label: 'Volunteering',
-    color: 'bg-pink-500/10 text-pink-700 dark:text-pink-400 border-pink-500/20',
-    icon: '❤️',
-  },
-  // Frontend format (kebab-case) for backwards compatibility
-  'success-story': {
-    label: 'Success Story',
-    color: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
-    icon: '🏆',
-  },
-  'career-milestone': {
-    label: 'Career Milestone',
-    color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-    icon: '📈',
-  },
-  'learning': {
-    label: 'Learning Journey',
-    color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
-    icon: '📚',
-  },
-};
-
-// Helper to format relative time
-const formatRelativeTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-};
-
-interface PostData {
-  id: number;
-  author: string;
-  avatar: string;
-  university: string;
-  year: string;
-  content: string;
-  type?: string;
-  tag?: string;
-  likes: number;
-  comments: number;
-  time: string;
-  media?: string;
-  videoUrl?: string;
-  thumbnail?: string;
-  jobTitle?: string;
-  company?: string;
-  location?: string;
-  user_liked?: boolean;
-  author_id?: number;
-  apiComments?: ApiPost['comments'];
-  apiMedia?: PostMedia[];
-}
 
 const SinglePost = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const { user, isAuthenticated } = useAuth();
+  const { postId } = useParams();
+  const { user } = useAuth();
   const { isOpen: isSidebarOpen, toggleSidebar } = useSidebar();
   const { toast } = useToast();
 
-  // State for post data
-  const [post, setPost] = useState<PostData | null>(location.state?.post || null);
+  const [post, setPost] = useState<any>(location.state?.post || null);
   const [isLoading, setIsLoading] = useState(!location.state?.post);
-  const [error, setError] = useState<string | null>(null);
-
-  // Interaction states
-  const [isLiked, setIsLiked] = useState(post?.user_liked || false);
-  const [likes, setLikes] = useState(post?.likes || 0);
-  const [comments, setComments] = useState(post?.comments || 0);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likes, setLikes] = useState(0);
+  const [comments, setComments] = useState(0);
   const [copiedPostId, setCopiedPostId] = useState<number | null>(null);
-  const [isLiking, setIsLiking] = useState(false);
+  const showComments = true;
 
-  // Fetch post from API if not provided via state
+  // Fetch post from API if not passed through state
   useEffect(() => {
     const fetchPost = async () => {
-      if (!id) {
-        setError('Post ID not provided');
+      if (post) {
+        // Post from state - initialize likes/comments
+        setLikes(post.likes || 0);
+        setComments(post.comments || 0);
+        return;
+      }
+      
+      if (!postId) {
         setIsLoading(false);
         return;
       }
-
-      // If post was passed via state, use it
-      if (location.state?.post) {
-        const statePost = location.state.post;
-        setPost(statePost);
-        setIsLiked(statePost.user_liked || false);
-        setLikes(statePost.likes || 0);
-        setComments(statePost.comments || 0);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
 
       try {
-        const apiPost = await feedService.getPost(parseInt(id, 10));
+        setIsLoading(true);
+        const apiPost = await apiClient.getPost(postId);
         
-        // Determine post type and media URLs from API media attachments
-        let type = 'text';
-        let media: string | undefined;
-        let videoUrl: string | undefined;
-        let thumbnail: string | undefined;
-
-        if (apiPost.media && apiPost.media.length > 0) {
-          const firstMedia = apiPost.media[0];
-          if (firstMedia.media_type === 'image') {
-            type = 'image';
-            media = getMediaUrl(firstMedia.media_url);
-          } else if (firstMedia.media_type === 'video') {
-            type = 'video';
-            videoUrl = getMediaUrl(firstMedia.media_url);
-            thumbnail = firstMedia.thumbnail_url ? getMediaUrl(firstMedia.thumbnail_url) : undefined;
-          }
-        }
-        
-        const mappedPost: PostData = {
+        // Format the post
+        const formattedPost = {
           id: apiPost.id,
-          author: apiPost.author_name,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiPost.author_name.replace(/\s+/g, '')}`,
-          university: apiPost.university_name,
-          year: new Date(apiPost.created_at).getFullYear().toString(),
-          content: apiPost.content,
-          type,
-          media,
-          videoUrl,
-          thumbnail,
-          tag: apiPost.tag, // Include tag from API
-          likes: apiPost.likes_count,
-          comments: apiPost.comments_count,
-          time: formatRelativeTime(apiPost.created_at),
-          user_liked: apiPost.user_liked,
-          author_id: apiPost.author_id,
-          apiComments: apiPost.comments,
-          apiMedia: apiPost.media,
+          type: apiPost.type || 'text',
+          author: apiPost.author?.name || 'Unknown',
+          avatar: apiPost.author?.avatar || '',
+          university: apiPost.author?.title || '',
+          year: '',
+          content: apiPost.content || '',
+          media: apiPost.media_url || undefined,
+          videoUrl: apiPost.video_url || undefined,
+          thumbnail: apiPost.thumbnail_url || undefined,
+          likes: apiPost.likes_count || 0,
+          comments: apiPost.comments_count || 0,
+          time: apiPost.time || '',
+          tag: apiPost.tag,
+          jobTitle: apiPost.job_title,
+          company: apiPost.company,
+          location: apiPost.location,
         };
-
-        setPost(mappedPost);
-        setIsLiked(apiPost.user_liked);
-        setLikes(apiPost.likes_count);
-        setComments(apiPost.comments_count);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load post';
-        setError(errorMessage);
-        toast({
-          title: 'Error loading post',
-          description: errorMessage,
-          variant: 'destructive',
-        });
+        
+        setPost(formattedPost);
+        setLikes(formattedPost.likes);
+        setComments(formattedPost.comments);
+        setIsLiked(apiPost.is_liked || false);
+      } catch (error) {
+        console.error('Failed to fetch post:', error);
+        setPost(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchPost();
-  }, [id, location.state?.post, toast]);
+  }, [postId, location.state?.post]);
+
+  // Handle like toggle with API
+  const handleLikeToggle = async () => {
+    if (!post) return;
+    
+    const wasLiked = isLiked;
+    
+    // Optimistic update
+    setIsLiked(!isLiked);
+    setLikes(wasLiked ? likes - 1 : likes + 1);
+
+    try {
+      if (wasLiked) {
+        const response = await apiClient.unlikePost(post.id.toString());
+        setLikes(response.likes_count);
+      } else {
+        const response = await apiClient.likePost(post.id.toString());
+        setLikes(response.likes_count);
+      }
+    } catch (error: any) {
+      // Revert on error
+      setIsLiked(wasLiked);
+      setLikes(wasLiked ? likes : likes - 1);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update like',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center">
+          <div className="relative mb-4">
+            <div className="w-16 h-16 rounded-full border-4 border-primary/20 animate-pulse" />
+            <div className="w-16 h-16 rounded-full border-4 border-t-primary border-transparent animate-spin absolute inset-0" />
+            <FileText className="w-6 h-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          </div>
+          <p className="text-sm text-muted-foreground animate-pulse">Loading post...</p>
+          <div className="flex gap-1 mt-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!post) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="p-10 text-center max-w-md border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+          <div className="flex flex-col items-center justify-center">
+            <div className="relative mb-5">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-destructive/10 to-destructive/5 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-destructive/20 to-destructive/10 flex items-center justify-center">
+                  <AlertCircle className="w-7 h-7 text-destructive/60" />
+                </div>
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Post Not Found</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mb-5">
+              The post you're looking for doesn't exist or may have been removed.
+            </p>
+            <Button onClick={() => navigate('/dashboard')} className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Return to Feed
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   const linkifyText = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -253,7 +205,6 @@ const SinglePost = () => {
   };
 
   const handleProfileClick = () => {
-    if (!post) return;
     if (post.author === user?.name || post.author === 'You') {
       navigate('/profile');
     } else {
@@ -270,57 +221,9 @@ const SinglePost = () => {
     }
   };
 
-  const handleLikeToggle = async () => {
-    if (!post) return;
-    
-    if (!isAuthenticated) {
-      toast({
-        title: 'Authentication required',
-        description: 'Please log in to like posts',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (isLiking) return;
-    setIsLiking(true);
-
-    // Optimistic update
-    const wasLiked = isLiked;
-    setIsLiked(!isLiked);
-    setLikes(prev => prev + (wasLiked ? -1 : 1));
-
-    try {
-      const response = await feedService.toggleLike(post.id);
-      
-      // Verify server state matches
-      if (response.liked !== !wasLiked) {
-        setIsLiked(response.liked);
-        // Refetch to get accurate count
-        const updatedPost = await feedService.getPost(post.id);
-        setLikes(updatedPost.likes_count);
-      }
-    } catch (err) {
-      // Revert on error
-      setIsLiked(wasLiked);
-      setLikes(prev => prev + (wasLiked ? 1 : -1));
-      
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update like';
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLiking(false);
-    }
-  };
-
   const handleShare = async (
     method: 'copy' | 'facebook' | 'twitter' | 'native',
   ) => {
-    if (!post) return;
-    
     const postUrl = `${window.location.origin}/post/${post.id}`;
     const shareText = `Check out this post by ${
       post.author
@@ -367,101 +270,6 @@ const SinglePost = () => {
       console.error('Share error:', error);
     }
   };
-
-  const handleCommentAdded = () => {
-    setComments(prev => prev + 1);
-  };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <DesktopNav />
-        <MobileNav />
-        <main
-          className={`min-h-screen pb-20 md:pb-0 transition-all duration-300 ${
-            isSidebarOpen ? 'md:ml-64' : 'md:ml-0'
-          }`}
-        >
-          <div className="w-full px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                <Skeleton className="h-9 w-9 rounded" />
-                <Skeleton className="h-9 flex-1 rounded" />
-              </div>
-              <Card className="p-5">
-                <div className="flex gap-3 mb-4">
-                  <Skeleton className="w-12 h-12 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-48" />
-                  </div>
-                </div>
-                <div className="space-y-2 mb-4">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                </div>
-                <Skeleton className="h-64 w-full rounded-lg" />
-                <div className="flex gap-4 mt-4">
-                  <Skeleton className="h-8 w-20" />
-                  <Skeleton className="h-8 w-32" />
-                  <Skeleton className="h-8 w-16" />
-                </div>
-              </Card>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error || !post) {
-    return (
-      <div className="min-h-screen bg-background">
-        <DesktopNav />
-        <MobileNav />
-        <main
-          className={`min-h-screen pb-20 md:pb-0 transition-all duration-300 ${
-            isSidebarOpen ? 'md:ml-64' : 'md:ml-0'
-          }`}
-        >
-          <div className="w-full px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-            <div className="max-w-4xl mx-auto">
-              <Card className="p-8 text-center">
-                <div className="text-destructive mb-4">
-                  <svg
-                    className="w-16 h-16 mx-auto mb-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <p className="text-lg font-medium mb-2">
-                    {error || 'Post not found'}
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    The post you're looking for might have been removed or doesn't exist.
-                  </p>
-                </div>
-                <Button onClick={() => navigate('/dashboard')}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Return to Feed
-                </Button>
-              </Card>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -525,7 +333,42 @@ const SinglePost = () => {
                 {/* Post Tag Badge */}
                 {post.tag &&
                   (() => {
-                    const tagInfo = tagDisplayMap[post.tag];
+                    const tagMap: Record<
+                      string,
+                      { label: string; color: string; icon: string }
+                    > = {
+                      'success-story': {
+                        label: 'Success Story',
+                        color:
+                          'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+                        icon: '🏆',
+                      },
+                      'career-milestone': {
+                        label: 'Career Milestone',
+                        color:
+                          'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+                        icon: '📈',
+                      },
+                      achievement: {
+                        label: 'Achievement',
+                        color:
+                          'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
+                        icon: '⭐',
+                      },
+                      learning: {
+                        label: 'Learning Journey',
+                        color:
+                          'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+                        icon: '📚',
+                      },
+                      volunteering: {
+                        label: 'Volunteering',
+                        color:
+                          'bg-pink-500/10 text-pink-700 dark:text-pink-400 border-pink-500/20',
+                        icon: '❤️',
+                      },
+                    };
+                    const tagInfo = tagMap[post.tag];
                     return tagInfo ? (
                       <Badge
                         className={`mb-3 ${tagInfo.color} border font-medium`}
@@ -585,17 +428,19 @@ const SinglePost = () => {
                 </div>
               )}
 
-              {post.type === 'video' && post.videoUrl && (
-                <div className="relative w-full bg-muted">
-                  <video
-                    src={post.videoUrl}
-                    poster={post.thumbnail}
-                    className="w-full object-cover max-h-[600px]"
-                    controls
-                    preload="metadata"
-                  >
-                    Your browser does not support the video tag.
-                  </video>
+              {post.type === 'video' && post.thumbnail && (
+                <div className="relative w-full group cursor-pointer bg-muted">
+                  <img
+                    src={post.thumbnail}
+                    alt="Video thumbnail"
+                    onError={handleImageError}
+                    className="w-full object-cover max-h-[450px]"
+                  />
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition-colors">
+                    <div className="w-20 h-20 rounded-full bg-white/95 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                      <Play className="w-10 h-10 text-primary ml-1" />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -611,10 +456,9 @@ const SinglePost = () => {
                         : 'hover:text-red-600 dark:hover:text-red-400'
                     }`}
                     onClick={handleLikeToggle}
-                    disabled={isLiking}
                   >
                     <Heart
-                      className={`w-5 h-5 ${isLiked ? 'fill-current' : ''} ${isLiking ? 'animate-pulse' : ''}`}
+                      className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`}
                     />
                     <span className="text-sm font-medium">{likes}</span>
                   </Button>
@@ -684,17 +528,12 @@ const SinglePost = () => {
               </div>
 
               {/* Comment Section */}
-              <CommentSection
-                postId={post.id}
-                onCommentAdded={handleCommentAdded}
-                initialComments={post.apiComments?.map(c => ({
-                  id: c.id.toString(),
-                  author: c.author_name,
-                  avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.author_name.replace(/\s+/g, '')}`,
-                  content: c.content,
-                  time: formatRelativeTime(c.created_at),
-                }))}
-              />
+              {showComments && (
+                <CommentSection
+                  postId={post.id}
+                  onCommentAdded={() => setComments(comments + 1)}
+                />
+              )}
             </Card>
           </div>
         </div>

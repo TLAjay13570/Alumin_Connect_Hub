@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,53 +7,20 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, Users, Shield, GraduationCap, Plus, Crown, Power, RefreshCw, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
+import { Search, Users, Shield, GraduationCap, Mail, Plus, Edit, Trash2, Crown, Power } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
-import { userService, ApiUser } from '@/services/userService';
-import { UserRole } from '@/types/auth';
 
 interface GlobalUser {
   id: string;
   name: string;
   email: string;
-  role: 'superadmin' | 'admin' | 'alumni' | 'student';
-  universityId?: number;
+  role: 'superadmin' | 'admin' | 'alumni';
+  universityId?: string;
   universityName?: string;
   graduationYear?: string;
   major?: string;
   isMentor?: boolean;
   enabled: boolean;
-  isVerified?: boolean;
-}
-
-// Map API role to display role
-function mapApiRoleToDisplay(role: UserRole): GlobalUser['role'] {
-  switch (role) {
-    case 'SUPER_ADMIN':
-      return 'superadmin';
-    case 'UNIVERSITY_ADMIN':
-      return 'admin';
-    case 'STUDENT':
-      return 'student';
-    case 'ALUMNI':
-    default:
-      return 'alumni';
-  }
-}
-
-// Map API user to GlobalUser
-function mapApiUserToGlobalUser(apiUser: ApiUser): GlobalUser {
-  return {
-    id: String(apiUser.id),
-    name: apiUser.full_name,
-    email: apiUser.email,
-    role: mapApiRoleToDisplay(apiUser.role),
-    universityId: apiUser.university_id ?? undefined,
-    universityName: apiUser.university_id ? `University ${apiUser.university_id}` : undefined,
-    enabled: apiUser.is_active,
-    isVerified: apiUser.is_verified,
-  };
 }
 
 const SuperAdminGlobalUsers = () => {
@@ -61,14 +28,14 @@ const SuperAdminGlobalUsers = () => {
   const [users, setUsers] = useState<GlobalUser[]>([]);
   const [universities, setUniversities] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'superadmins' | 'admins' | 'alumni' | 'students'>('all');
+  const [filter, setFilter] = useState<'all' | 'superadmins' | 'admins' | 'alumni' | 'mentors'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<GlobalUser | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'alumni' as 'superadmin' | 'admin' | 'alumni' | 'student',
+    role: 'alumni' as 'superadmin' | 'admin' | 'alumni',
     universityId: '',
     graduationYear: '',
     major: '',
@@ -76,61 +43,54 @@ const SuperAdminGlobalUsers = () => {
     enabled: true,
   });
 
-  // Loading and error states
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Load users from API
-  const loadUsers = useCallback(async (showRefreshIndicator = false) => {
-    if (showRefreshIndicator) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
-
-    try {
-      const apiUsers = await userService.listUsers({ skip: 0, limit: 100 });
-      const mappedUsers = apiUsers.map(mapApiUserToGlobalUser);
-      setUsers(mappedUsers);
-
-      if (showRefreshIndicator) {
-        toast({
-          title: 'Users refreshed',
-          description: `Loaded ${mappedUsers.length} users`,
-        });
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load users';
-      setError(errorMessage);
-      toast({
-        title: 'Error loading users',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [toast]);
+  useEffect(() => {
+    loadUsers();
+    loadUniversities();
+  }, []);
 
   const loadUniversities = () => {
     const unis = JSON.parse(localStorage.getItem('alumni_universities') || '[]');
     setUniversities(unis);
   };
 
-  useEffect(() => {
-    loadUsers();
-    loadUniversities();
-  }, [loadUsers]);
+  const loadUsers = () => {
+    const unis = JSON.parse(localStorage.getItem('alumni_universities') || '[]');
+    const allUsers: GlobalUser[] = [];
 
-  // Handle manual refresh
-  const handleRefresh = () => {
-    loadUsers(true);
+    // Load super admins
+    const superAdmins = JSON.parse(localStorage.getItem('super_admins_list') || '[]');
+    superAdmins.forEach((sa: any) => {
+      allUsers.push({ ...sa, role: 'superadmin', enabled: sa.enabled !== false });
+    });
+
+    // Load admins
+    const admins = JSON.parse(localStorage.getItem('super_admin_admins') || '[]');
+    admins.forEach((admin: any) => {
+      const uni = unis.find((u: any) => u.id === admin.universityId);
+      allUsers.push({
+        ...admin,
+        role: 'admin',
+        universityName: uni?.name,
+        enabled: admin.enabled !== false,
+      });
+    });
+
+    // Load alumni from all universities
+    unis.forEach((uni: any) => {
+      const uniUsers = JSON.parse(localStorage.getItem(`alumni_users_${uni.id}`) || '[]');
+      uniUsers.forEach((user: any) => {
+        allUsers.push({
+          ...user,
+          role: 'alumni',
+          universityName: uni.name,
+          enabled: user.enabled !== false,
+        });
+      });
+    });
+
+    setUsers(allUsers);
   };
 
-  // Create user - placeholder for future API implementation
   const handleCreate = () => {
     if (!formData.name || !formData.email || !formData.password) {
       toast({
@@ -150,25 +110,89 @@ const SuperAdminGlobalUsers = () => {
       return;
     }
 
-    // This would require an API endpoint to create users
-    // For now, show a message that this feature is not yet available via API
+    const newUser: GlobalUser = {
+      id: `user_${Date.now()}`,
+      name: formData.name,
+      email: formData.email,
+      role: formData.role,
+      universityId: formData.universityId,
+      universityName: universities.find(u => u.id === formData.universityId)?.name,
+      graduationYear: formData.graduationYear,
+      major: formData.major,
+      isMentor: formData.isMentor,
+      enabled: formData.enabled,
+    };
+
+    // Save based on role
+    if (formData.role === 'superadmin') {
+      const superAdmins = JSON.parse(localStorage.getItem('super_admins_list') || '[]');
+      superAdmins.push(newUser);
+      localStorage.setItem('super_admins_list', JSON.stringify(superAdmins));
+    } else if (formData.role === 'admin') {
+      const admins = JSON.parse(localStorage.getItem('super_admin_admins') || '[]');
+      admins.push(newUser);
+      localStorage.setItem('super_admin_admins', JSON.stringify(admins));
+    } else {
+      const uniUsers = JSON.parse(localStorage.getItem(`alumni_users_${formData.universityId}`) || '[]');
+      uniUsers.push(newUser);
+      localStorage.setItem(`alumni_users_${formData.universityId}`, JSON.stringify(uniUsers));
+    }
+
+    loadUsers();
     toast({
-      title: 'Feature not available',
-      description: 'User creation via this interface requires additional API support. Please use the registration flow.',
-      variant: 'destructive',
+      title: 'User created',
+      description: `${formData.name} has been added as ${formData.role}`,
     });
     resetForm();
   };
 
-  // Toggle user enabled status - placeholder for future API implementation
   const handleToggleEnabled = (user: GlobalUser) => {
-    // This would require an API endpoint to update user status
-    // For now, show a message that this feature is not yet available
+    const newStatus = !user.enabled;
+    
+    if (user.role === 'superadmin') {
+      const superAdmins = JSON.parse(localStorage.getItem('super_admins_list') || '[]');
+      const updated = superAdmins.map((u: any) => u.id === user.id ? { ...u, enabled: newStatus } : u);
+      localStorage.setItem('super_admins_list', JSON.stringify(updated));
+    } else if (user.role === 'admin') {
+      const admins = JSON.parse(localStorage.getItem('super_admin_admins') || '[]');
+      const updated = admins.map((u: any) => u.id === user.id ? { ...u, enabled: newStatus } : u);
+      localStorage.setItem('super_admin_admins', JSON.stringify(updated));
+    } else if (user.universityId) {
+      const uniUsers = JSON.parse(localStorage.getItem(`alumni_users_${user.universityId}`) || '[]');
+      const updated = uniUsers.map((u: any) => u.id === user.id ? { ...u, enabled: newStatus } : u);
+      localStorage.setItem(`alumni_users_${user.universityId}`, JSON.stringify(updated));
+    }
+
+    loadUsers();
     toast({
-      title: 'Feature not available',
-      description: 'User status management requires additional API support.',
-      variant: 'destructive',
+      title: newStatus ? 'User enabled' : 'User disabled',
+      description: `${user.name} is now ${newStatus ? 'enabled' : 'disabled'}`,
     });
+  };
+
+  const handleDelete = (user: GlobalUser) => {
+    if (window.confirm(`Are you sure you want to delete ${user.name}?`)) {
+      if (user.role === 'superadmin') {
+        const superAdmins = JSON.parse(localStorage.getItem('super_admins_list') || '[]');
+        const updated = superAdmins.filter((u: any) => u.id !== user.id);
+        localStorage.setItem('super_admins_list', JSON.stringify(updated));
+      } else if (user.role === 'admin') {
+        const admins = JSON.parse(localStorage.getItem('super_admin_admins') || '[]');
+        const updated = admins.filter((u: any) => u.id !== user.id);
+        localStorage.setItem('super_admin_admins', JSON.stringify(updated));
+      } else if (user.universityId) {
+        const uniUsers = JSON.parse(localStorage.getItem(`alumni_users_${user.universityId}`) || '[]');
+        const updated = uniUsers.filter((u: any) => u.id !== user.id);
+        localStorage.setItem(`alumni_users_${user.universityId}`, JSON.stringify(updated));
+      }
+
+      loadUsers();
+      toast({
+        title: 'User deleted',
+        description: `${user.name} has been removed`,
+        variant: 'destructive',
+      });
+    }
   };
 
   const resetForm = () => {
@@ -197,7 +221,7 @@ const SuperAdminGlobalUsers = () => {
     if (filter === 'superadmins') matchesFilter = user.role === 'superadmin';
     else if (filter === 'admins') matchesFilter = user.role === 'admin';
     else if (filter === 'alumni') matchesFilter = user.role === 'alumni';
-    else if (filter === 'students') matchesFilter = user.role === 'student';
+    else if (filter === 'mentors') matchesFilter = user.isMentor === true;
     
     return matchesSearch && matchesFilter;
   });
@@ -206,7 +230,7 @@ const SuperAdminGlobalUsers = () => {
     superadmins: users.filter(u => u.role === 'superadmin').length,
     admins: users.filter(u => u.role === 'admin').length,
     alumni: users.filter(u => u.role === 'alumni').length,
-    students: users.filter(u => u.role === 'student').length,
+    mentors: users.filter(u => u.isMentor).length,
   };
 
   return (
@@ -220,53 +244,31 @@ const SuperAdminGlobalUsers = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {isLoading ? (
-              <>
-                <Skeleton className="h-6 w-24" />
-                <Skeleton className="h-6 w-20" />
-                <Skeleton className="h-6 w-24" />
-                <Skeleton className="h-6 w-24" />
-              </>
-            ) : (
-              <>
-                <Badge variant="outline" className="flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  {users.length} Total
-                </Badge>
-                <Badge variant="outline" className="flex items-center gap-2">
-                  <Crown className="w-4 h-4 text-purple-500" />
-                  {roleCount.superadmins} Super
-                </Badge>
-                <Badge variant="outline" className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-blue-500" />
-                  {roleCount.admins} Admins
-                </Badge>
-                <Badge variant="outline" className="flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-green-500" />
-                  {roleCount.alumni} Alumni
-                </Badge>
-                <Badge variant="outline" className="flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-orange-500" />
-                  {roleCount.students} Students
-                </Badge>
-              </>
-            )}
+            <Badge variant="outline" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              {users.length} Total
+            </Badge>
+            <Badge variant="outline" className="flex items-center gap-2">
+              <Crown className="w-4 h-4 text-purple-500" />
+              {roleCount.superadmins} Super
+            </Badge>
+            <Badge variant="outline" className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-500" />
+              {roleCount.admins} Admins
+            </Badge>
+            <Badge variant="outline" className="flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-green-500" />
+              {roleCount.alumni} Alumni
+            </Badge>
+            <Badge variant="outline" className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-orange-500" />
+              {roleCount.mentors} Mentors
+            </Badge>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              onClick={handleRefresh} 
-              variant="outline" 
-              size="sm"
-              disabled={isRefreshing || isLoading}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button onClick={() => setIsModalOpen(true)} disabled={isLoading}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add User
-            </Button>
-          </div>
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add User
+          </Button>
         </div>
 
         <div className="space-y-3">
@@ -281,20 +283,20 @@ const SuperAdminGlobalUsers = () => {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')} disabled={isLoading}>
+            <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')}>
               All
             </Button>
-            <Button variant={filter === 'superadmins' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('superadmins')} disabled={isLoading}>
+            <Button variant={filter === 'superadmins' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('superadmins')}>
               Super
             </Button>
-            <Button variant={filter === 'admins' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('admins')} disabled={isLoading}>
+            <Button variant={filter === 'admins' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('admins')}>
               Admins
             </Button>
-            <Button variant={filter === 'alumni' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('alumni')} disabled={isLoading}>
+            <Button variant={filter === 'alumni' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('alumni')}>
               Alumni
             </Button>
-            <Button variant={filter === 'students' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('students')} disabled={isLoading}>
-              Students
+            <Button variant={filter === 'mentors' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('mentors')}>
+              Mentors
             </Button>
           </div>
         </div>
@@ -315,43 +317,31 @@ const SuperAdminGlobalUsers = () => {
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                // Loading skeleton rows
-                Array.from({ length: 5 }).map((_, index) => (
-                  <tr key={`skeleton-${index}`} className="border-b border-border">
-                    <td className="py-3"><Skeleton className="h-4 w-32" /></td>
-                    <td className="py-3"><Skeleton className="h-4 w-40" /></td>
-                    <td className="py-3"><Skeleton className="h-6 w-24" /></td>
-                    <td className="py-3"><Skeleton className="h-6 w-28" /></td>
-                    <td className="py-3"><Skeleton className="h-6 w-16" /></td>
-                    <td className="py-3"><Skeleton className="h-7 w-16" /></td>
-                  </tr>
-                ))
-              ) : error ? (
-                // Error state
+              {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <AlertCircle className="w-10 h-10 text-destructive" />
-                      <div className="text-destructive font-medium">{error}</div>
-                      <Button onClick={handleRefresh} variant="outline" size="sm">
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Try Again
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center gap-2">
-                      <Users className="w-10 h-10 opacity-50" />
-                      <p>No users found</p>
+                  <td colSpan={6} className="py-12">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="relative mb-4">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                            <Search className="w-5 h-5 text-primary/60" />
+                          </div>
+                        </div>
+                      </div>
+                      <h4 className="font-medium mb-1">No Users Found</h4>
+                      <p className="text-sm text-muted-foreground text-center max-w-sm">
+                        {searchQuery 
+                          ? `No users matching "${searchQuery}" in the ${filter === 'all' ? 'system' : filter} category.`
+                          : filter === 'all' 
+                          ? 'No users in the system yet. Add users to get started.'
+                          : `No ${filter} found in the system.`}
+                      </p>
                       {(searchQuery || filter !== 'all') && (
                         <Button 
-                          onClick={() => { setSearchQuery(''); setFilter('all'); }} 
                           variant="outline" 
-                          size="sm"
+                          size="sm" 
+                          className="mt-3"
+                          onClick={() => { setSearchQuery(''); setFilter('all'); }}
                         >
                           Clear Filters
                         </Button>
@@ -361,15 +351,8 @@ const SuperAdminGlobalUsers = () => {
                 </tr>
               ) : (
                 filteredUsers.map(user => (
-                  <tr key={user.id} className={`border-b border-border hover:bg-muted/50 ${!user.enabled ? 'opacity-60' : ''}`}>
-                    <td className="py-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        {user.name}
-                        {user.isVerified && (
-                          <CheckCircle className="w-4 h-4 text-green-500" title="Verified" />
-                        )}
-                      </div>
-                    </td>
+                  <tr key={user.id} className="border-b border-border hover:bg-muted/50">
+                    <td className="py-3 text-sm">{user.name}</td>
                     <td className="py-3 text-sm text-muted-foreground">{user.email}</td>
                     <td className="py-3 text-sm">
                       {user.role === 'superadmin' && (
@@ -390,12 +373,6 @@ const SuperAdminGlobalUsers = () => {
                           Alumni
                         </Badge>
                       )}
-                      {user.role === 'student' && (
-                        <Badge variant="outline" className="text-xs">
-                          <GraduationCap className="w-3 h-3 mr-1" />
-                          Student
-                        </Badge>
-                      )}
                     </td>
                     <td className="py-3 text-sm">
                       {user.universityName ? (
@@ -413,7 +390,7 @@ const SuperAdminGlobalUsers = () => {
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 text-xs">
-                          Inactive
+                          Disabled
                         </Badge>
                       )}
                     </td>
@@ -424,10 +401,16 @@ const SuperAdminGlobalUsers = () => {
                           variant="ghost"
                           onClick={() => handleToggleEnabled(user)}
                           className="h-7 px-2"
-                          title={user.enabled ? 'Disable user' : 'Enable user'}
-                          disabled
                         >
                           <Power className="w-3 h-3" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => handleDelete(user)}
+                          className="h-7 px-2 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
                     </td>

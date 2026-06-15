@@ -160,12 +160,27 @@ const AdminKnowledgeBase = () => {
       {/* Documents Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {documents.length === 0 ? (
-          <Card className="p-8 text-center col-span-full">
-            <Book className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No documents uploaded yet</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Upload documents to enhance your chatbot's knowledge
-            </p>
+          <Card className="p-10 text-center col-span-full border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative mb-5">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                    <Book className="w-7 h-7 text-primary/60" />
+                  </div>
+                </div>
+                <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
+                  <Plus className="w-4 h-4 text-primary" />
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No Documents Yet</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mb-5">
+                Upload documents to enhance your chatbot's knowledge and provide better assistance to alumni.
+              </p>
+              <Button onClick={() => setIsModalOpen(true)} className="gap-2">
+                <Upload className="w-4 h-4" />
+                Upload First Document
+              </Button>
+            </div>
           </Card>
         ) : (
           documents.map(doc => (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUniversity } from '@/contexts/UniversityContext';
+import { apiClient } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,33 +44,60 @@ const AdminBranding = () => {
     }
   }, [university]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!user?.universityId) return;
 
-    updateUniversityBranding(user.universityId, {
-      name: formData.name,
-      logo: formData.logo,
-      colors: {
-        light: {
-          primary: formData.lightPrimary,
-          secondary: formData.lightSecondary,
-          accent: formData.lightAccent,
-        },
-        dark: {
-          primary: formData.darkPrimary,
-          secondary: formData.darkSecondary,
-          accent: formData.darkAccent,
-        },
-      },
-    });
+    try {
+      // Update university name and logo
+      if (formData.name !== university?.name || formData.logo !== university?.logo) {
+        await apiClient.updateUniversity(user.universityId, {
+          name: formData.name,
+          logo: formData.logo,
+        });
+      }
 
-    // Apply colors to CSS variables
-    applyColors();
+      // Update branding colors
+      await apiClient.updateUniversityBranding(user.universityId, {
+        light_primary: formData.lightPrimary,
+        light_secondary: formData.lightSecondary,
+        light_accent: formData.lightAccent,
+        dark_primary: formData.darkPrimary,
+        dark_secondary: formData.darkSecondary,
+        dark_accent: formData.darkAccent,
+      });
 
-    toast({
-      title: 'Branding updated',
-      description: 'University branding has been saved successfully',
-    });
+      // Update local context
+      updateUniversityBranding(user.universityId, {
+        name: formData.name,
+        logo: formData.logo,
+        colors: {
+          light: {
+            primary: formData.lightPrimary,
+            secondary: formData.lightSecondary,
+            accent: formData.lightAccent,
+          },
+          dark: {
+            primary: formData.darkPrimary,
+            secondary: formData.darkSecondary,
+            accent: formData.darkAccent,
+          },
+        },
+      });
+
+      // Apply colors to CSS variables
+      applyColors();
+
+      toast({
+        title: 'Branding updated',
+        description: 'University branding has been saved successfully',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update branding',
+        variant: 'destructive',
+      });
+    }
   };
 
   const applyColors = () => {

@@ -224,9 +224,36 @@ const SuperAdminPasswordResets = () => {
       {/* Requests List */}
       <div className="space-y-3">
         {filteredRequests.length === 0 ? (
-          <Card className="p-8 text-center">
-            <Key className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No password reset requests</p>
+          <Card className="p-10 text-center border-dashed border-2 bg-gradient-to-br from-muted/30 via-background to-muted/30">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative mb-6">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500/10 to-green-500/5 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center">
+                    <Key className="w-7 h-7 text-green-500/60" />
+                  </div>
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">
+                {filter === 'all' ? 'No Password Reset Requests' : `No ${filter.charAt(0).toUpperCase() + filter.slice(1)} Requests`}
+              </h3>
+              <p className="text-muted-foreground max-w-md text-sm">
+                {filter === 'all' 
+                  ? 'All password reset requests from admins and alumni will appear here for your review.'
+                  : filter === 'pending'
+                  ? 'Great! There are no pending requests that need your attention right now.'
+                  : filter === 'approved'
+                  ? 'No requests have been approved yet. Pending requests can be approved from the "Pending" tab.'
+                  : 'No requests have been rejected. Rejected requests will appear here for reference.'}
+              </p>
+              {filter !== 'all' && (
+                <Button variant="outline" className="mt-4" onClick={() => setFilter('all')}>
+                  View All Requests
+                </Button>
+              )}
+            </div>
           </Card>
         ) : (
           filteredRequests.map(request => (
